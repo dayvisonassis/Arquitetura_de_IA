@@ -1,0 +1,47 @@
+{
+  "name": "arquitetura-de-ia",
+  "version": "1.0.0",
+  "description": "Aplicação MVC com Node.js e TypeScript",
+  "main": "dist/server.js",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint . --max-warnings=0",
+    "gate": "node scripts/runGate.mjs",
+    "gate:typecheck": "node scripts/runGate.mjs typecheck",
+    "gate:lint": "node scripts/runGate.mjs lint",
+    "gate:build": "node scripts/runGate.mjs build",
+    "gate:arch": "node scripts/runGate.mjs arch",
+    "gate:tests": "node scripts/runGate.mjs tests",
+    "gate:deadcode": "node scripts/runGate.mjs deadcode"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "ejs": "^6.0.1",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.6.2",
+    "@types/supertest": "^7.2.1",
+    "dependency-cruiser": "^18.4.0",
+    "eslint": "^10.11.0",
+    "jest": "^30.5.2",
+    "knip": "^6.38.0",
+    "supertest": "^7.3.0",
+    "ts-jest": "^29.4.13",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.70.1"
+  }
+}

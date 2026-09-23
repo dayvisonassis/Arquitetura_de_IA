@@ -1,0 +1,4 @@
+body { font-family: system-ui, sans-serif; max-width: 48rem; margin: 0 auto; padding: 1rem; }
+nav a { margin-right: 1rem; }
+.error { color: #b00020; }
+form { display: flex; gap: .5rem; flex-wrap: wrap; }

@@ -1,0 +1,24 @@
+<%- include('../partials/header') %>
+<h1>Usuários</h1>
+
+<% if (typeof error !== 'undefined') { %>
+  <p class="error"><%= error %></p>
+<% } %>
+
+<% if (users.length === 0) { %>
+  <p>Nenhum usuário cadastrado.</p>
+<% } else { %>
+  <ul>
+    <% users.forEach((user) => { %>
+      <li><a href="/users/<%= user.id %>"><%= user.name %></a> — <%= user.email %></li>
+    <% }) %>
+  </ul>
+<% } %>
+
+<h2>Novo usuário</h2>
+<form method="post" action="/users">
+  <input name="name" placeholder="Nome" required>
+  <input name="email" type="email" placeholder="E-mail" required>
+  <button type="submit">Salvar</button>
+</form>
+<%- include('../partials/footer') %>
