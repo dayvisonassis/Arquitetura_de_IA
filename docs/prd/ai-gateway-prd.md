@@ -2,15 +2,18 @@
 
 ## 1. Resumo Executivo
 
-O AI Gateway é um proxy de IA multi-tenant, escrito em TypeScript, que fica entre os sistemas de uma organização e os provedores de modelos de linguagem. Os sistemas não chamam mais a OpenAI ou o Google direto. Eles pedem uma **capacidade**, um nome lógico como `developer-assistant` ou `ticket-classifier`, a uma API compatível com a da OpenAI. O gateway decide qual modelo físico atende, aplica as permissões, as cotas e os limites de quem pediu, trata falhas com retry, cooldown e fallback, e registra cada chamada com tokens, custo e latência.
+O AI Gateway é um proxy de IA multi-tenant que fica entre os sistemas de uma organização e os provedores de modelos de linguagem. Os sistemas não chamam mais a OpenAI ou o Google direto. Eles pedem uma **capacidade**, um nome lógico como `developer-assistant` ou `ticket-classifier`, a uma API compatível com a da OpenAI. O gateway decide qual modelo físico atende, aplica as permissões, as cotas e os limites de quem pediu, trata falhas com retry, cooldown e fallback, e registra cada chamada com tokens, custo e latência.
 
 O produto atende quatro públicos. O **administrador da plataforma** cadastra domínios (tenants) e opera o catálogo. O **administrador de domínio** define quais capacidades cada usuário pode usar e quanto pode consumir por dia. O **usuário** consome IA pelas telas do sistema e acompanha o próprio saldo. O **desenvolvedor integrador** conecta scripts e serviços com o SDK oficial da OpenAI, usando uma chave de aplicação. O valor central é controlar, por usuário e por capacidade, **quem pode usar o quê, quanto pode usar e quanto já usou**, sem que nenhum cliente conheça provedor, modelo ou chave real.
 
-A solução tem dois serviços TypeScript separados, que rodam em containers numa rede interna:
-- **O proxy**, com a API compatível com OpenAI e a API administrativa, que guarda domínios, chaves, limites e registros de uso em MySQL e Redis.
-- **O sistema web** (Express MVC com EJS), que oferece login, as telas de administração, o playground, o classificador de tickets e as telas de consumo.
+A solução é um monorepo de apps independentes, que rodam em containers numa rede interna:
+- **O proxy** (`apps/ia`, Node.js com Express em TypeScript), com a API compatível com OpenAI e a API administrativa, que guarda domínios, chaves, limites e registros de uso em MySQL e Redis.
+- **O sistema web**, em duas partes:
+  - o frontend (`apps/frontend`, Angular 19 com Angular Material), que oferece login, as telas de administração, o playground, o classificador de tickets e as telas de consumo;
+  - o backend (`apps/backend`, Node.js com Express em JavaScript), que atende essas telas pela API `/v2`, guarda os usuários e fala com o proxy.
+- **O destino simulado** (`apps/ia_simulator`), usado só nos testes e no ambiente local.
 
-Nesta versão, os destinos são a OpenAI e o Google Gemini (pela chave do Google AI Studio), cada um servindo como primário ou fallback conforme a capacidade. O projeto nasce como trabalho do MBA em Arquitetura de IA: reproduz as demonstrações da aula de AI Gateway e é a base para as próximas fases, que são cache, RAG, observabilidade com Langfuse e evals.
+Nesta versão, os destinos são a OpenAI e o Google Gemini (pela chave do Google AI Studio), cada um servindo como primário ou fallback conforme a capacidade. O projeto nasce como trabalho do MBA em Arquitetura de IA: reproduz as demonstrações da aula de AI Gateway e é a base para as próximas fases, que são cache, RAG, observabilidade com Langfuse e evals. Ele também serve de laboratório: segue a stack e as convenções do sistema para onde as tecnologias testadas aqui serão levadas, para que o aprendido possa ser portado sem tradução.
 
 ## 2. Problema e Oportunidade
 
@@ -114,8 +117,9 @@ Todos os perfis trabalham num ambiente técnico interno, pelo navegador em deskt
 ## 5. Histórias de Usuário
 
 ### F01. Fundação: monorepo e ambiente local
-- Como desenvolvedor do projeto, quero subir o proxy, o sistema web, o MySQL, o Redis e o destino simulado com um único `docker compose up`, para ter o ambiente completo em minutos.
-- Como desenvolvedor do projeto, quero que o `npm run gate` verifique os dois serviços e o pacote de contrato, para que nenhuma mudança quebre o outro lado sem ser notada.
+- Como desenvolvedor do projeto, quero subir o frontend, o backend, o proxy, o destino simulado, o MySQL e o Redis com um único `./dev.sh`, para ter o ambiente completo em minutos.
+- Como desenvolvedor do projeto, quero que o `npm run gate` verifique todos os apps, para que nenhuma mudança quebre outro app sem ser notada.
+- Como desenvolvedor do projeto, quero que cada app siga a stack e as convenções do sistema para onde as tecnologias serão levadas, para levar para lá o que eu testar aqui sem reescrever.
 - Como sistema, quero atribuir a toda requisição um request ID no formato de trace ID W3C, para correlacionar erros, registros de uso e, no futuro, traces do Langfuse.
 
 ### F02. Catálogo de capacidades
@@ -136,6 +140,8 @@ Todos os perfis trabalham num ambiente técnico interno, pelo navegador em deskt
 ### F05. Domínios
 - Como administrador da plataforma, quero criar um domínio com nome, capacidades habilitadas, budget mensal, rate limits e cota diária padrão por capacidade, para abrir um novo tenant.
 - Como administrador da plataforma, quero desativar um domínio e ver todas as chaves dele pararem na hora, para cortar o acesso de uma área inteira.
+- Como administrador da plataforma, quero remover um domínio que não será mais usado, mantendo os registros dele, para tirá-lo da operação sem perder o histórico.
+- Como administrador da plataforma, quero restaurar um domínio removido numa emergência, para recuperar o tenant sem reconstruí-lo.
 
 ### F06. Virtual keys e permissões
 - Como sistema, quero emitir uma virtual key para cada usuário e para cada aplicação, vinculada ao domínio, para que o domínio e o dono sejam derivados da própria credencial.
@@ -144,7 +150,8 @@ Todos os perfis trabalham num ambiente técnico interno, pelo navegador em deskt
 - Como administrador de domínio, quero revogar, regenerar e definir uma data de expiração para uma chave, e ver o seu último uso, para manter o controle do ciclo de vida das credenciais.
 
 ### F07. Administração da plataforma
-- Como administrador da plataforma, quero listar, criar, editar e desativar domínios numa tela, para gerenciar os tenants sem usar a API.
+- Como administrador da plataforma, quero listar, criar, editar, desativar, remover e restaurar domínios numa tela, para gerenciar os tenants sem usar a API.
+- Como administrador da plataforma, quero confirmar a remoção de um domínio duas vezes, a segunda digitando o nome dele, para não remover o domínio errado por engano.
 - Como administrador da plataforma, quero criar o primeiro administrador de um domínio junto com o domínio, para que a área já possa se autogerir.
 - Como administrador da plataforma, quero ver cada capacidade e deployment com o seu estado (ativo, suspenso, em cooldown) e suspendê-los com um clique, para operar incidentes e demonstrar o fallback.
 
@@ -210,31 +217,55 @@ Todos os perfis trabalham num ambiente técnico interno, pelo navegador em deskt
 ### F01. Fundação: monorepo e ambiente local
 
 **Regras e limites:**
-- **Monorepo com npm workspaces:**
-  - `apps/web`, o sistema web atual;
-  - `services/ai-gateway`, o proxy;
-  - `packages/contract`, com nomes de capacidade, códigos de erro, nomes de headers e schemas de request e response.
-- **Fronteira entre os serviços:** o proxy e o sistema web nunca importam código interno um do outro, só `packages/contract`. A regra é verificada pelo gate `arch`.
-- **`docker compose` sobe cinco serviços numa rede interna:**
-  - proxy;
-  - sistema web;
-  - MySQL 8, com um schema por serviço (`gateway` e `web`);
-  - Redis 7, com bancos lógicos separados para o proxy e para as sessões do sistema web;
-  - destino simulado.
-- **Portas:** o sistema web publica apenas `127.0.0.1:3000`, e o proxy publica apenas `127.0.0.1:4000`, para o script de exemplo. Nenhuma porta é publicada em `0.0.0.0`.
-- **Health checks:** os dois serviços expõem `GET /health/live` e `GET /health/ready`. O `ready` verifica MySQL e Redis e é usado pelos healthchecks do compose.
+- **Apps independentes em `apps/`, sem npm workspaces.** Cada app tem o próprio `package.json`, lockfile e configuração de lint, formatação e testes:
+  - `apps/frontend`: Angular 19.2 com Angular Material 19, componentes standalone, testes com Jest e `jest-preset-angular`;
+  - `apps/backend`: Node.js 22 com Express 4, em JavaScript transpilado pelo Babel, testes com Jest e Supertest;
+  - `apps/ia`: o proxy, Node.js 22 com Express 4 em TypeScript, testes com Jest e `ts-jest`;
+  - `apps/ia_simulator`: o destino simulado (F03), no mesmo molde do `apps/ia`, sem banco.
+- **Acesso a dados:** o backend e o proxy usam Knex 3 com `mysql2` e o cliente `redis` 4. Cada um usa conexões separadas de leitura e de escrita, que nesta versão apontam para o mesmo MySQL.
+- **Raiz:** só as ferramentas comuns (Husky com lint-staged, Prettier 3.8.3, ESLint 8, Playwright) e scripts que entram em cada app (`cd apps/<app> && ...`). O Node fica fixado em 22.13.0 no `.nvmrc`. O script de exemplo da F11 fica em `examples/`, com `package.json` e lockfile próprios.
+- **Fronteira entre os apps:**
+  - nenhum app importa código de outro, e o gate `arch` verifica a regra;
+  - o frontend fala só com o backend, e só o backend fala com o proxy, sempre pela API HTTP;
+  - o backend descreve, em testes de contrato, o que espera de cada endpoint do proxy que usa (`/v1` e `/admin/*`): status, códigos de erro, headers e campos de request e response. O proxy verifica esses contratos nos testes dele. Os arquivos de contrato ficam em `contracts/`, na raiz, a única pasta lida pelos dois apps. A F01 cria o mecanismo e o primeiro contrato (o 401 da master key), e cada feature que passa a usar um endpoint do proxy acrescenta o contrato dele.
+- **Ambiente local em dois arquivos compose**, numa rede Docker compartilhada:
+  - infraestrutura (`docker-compose.infra.dev.yml`): MySQL 8 e Redis 7.4. O MySQL tem um schema por serviço (`gateway` para o proxy e `web` para o backend) e um schema de teste para cada um (`gateway_test` e `web_test`), e cada serviço usa um usuário MySQL que só acessa os próprios schemas. O Redis tem bancos lógicos separados para o proxy e para o backend, e um banco de teste para cada um;
+  - apps (`docker-compose.app.dev.yml`): frontend, backend, proxy e destino simulado, com o código montado no container e recarga automática;
+  - o script `./dev.sh` sobe os dois, aplica as migrations pendentes e derruba tudo com `./dev.sh --down`.
+- **Portas, todas em `127.0.0.1`:** 4200 (frontend), 3030 (backend) e 3131 (proxy, para o script de exemplo). No ambiente de desenvolvimento, também 3306 (MySQL) e 6379 (Redis), para os testes que rodam fora dos containers. Nenhuma porta é publicada em `0.0.0.0`, e o destino simulado existe só na rede interna.
+- **Banco de dados:** cada serviço com banco tem as próprias migrations Knex (`YYYYMMDDHHMMSS_descricao`, com `up` e `down`) e seeds. Nenhuma tabela de um schema tem chave estrangeira para o outro.
+- **Testes com banco:** os testes que usam MySQL ou Redis rodam fora dos containers, com `NODE_ENV=testing`, contra os schemas de teste.
+- **Health checks:**
+  - o backend e o proxy expõem `GET /health/live` e `GET /health/ready`, e o `ready` verifica o MySQL e o Redis;
+  - o destino simulado expõe `GET /health/live`;
+  - o frontend está saudável quando `/` responde 200;
+  - os healthchecks do compose usam esses endpoints.
+- **Comunicação entre frontend e backend:**
+  - o frontend chama o backend em `http://127.0.0.1:3030/v2`;
+  - o backend aceita CORS só da origem do frontend, configurada em `FRONTEND_ORIGIN` (padrão `http://127.0.0.1:4200`), permite o header `Authorization` e expõe o header `x-request-id`;
+  - os erros do backend têm o formato `{ "message": "..." }`, com o status HTTP correspondente.
 - **Request ID:**
-  - Os dois serviços aceitam um `x-request-id` recebido se ele tiver 32 caracteres hexadecimais minúsculos (formato de trace ID W3C); caso contrário, geram um novo.
+  - O backend e o proxy aceitam um `x-request-id` recebido se ele tiver 32 caracteres hexadecimais minúsculos (formato de trace ID W3C); caso contrário, geram um novo.
   - O ID é devolvido no header `x-request-id` de toda resposta.
-  - O sistema web repassa o ID dele ao proxy.
-- **API administrativa do proxy** (`/admin/*`): autenticada pela master key (`GATEWAY_MASTER_KEY`, com no mínimo 32 caracteres). Só o sistema web a conhece.
-- **Segredos:** chegam só por variáveis de ambiente, lidas no módulo de configuração de cada serviço. O `.env` fica fora do Git, e o `.env.example` lista todas as variáveis.
-- **`npm run gate`:** roda typecheck, lint com zero warnings, build, arch, testes (cobertura ≥ 80%) e deadcode nos três workspaces. Nenhum teste chama um provedor real.
-- **Dependências:** fixadas pelo `package-lock.json` e instaladas com `npm ci`. As imagens Docker são fixadas por digest.
+  - O backend repassa o ID dele ao proxy.
+  - O frontend lê o ID do header das respostas para mostrá-lo nas mensagens de erro.
+- **API administrativa do proxy** (`/admin/*`): autenticada pela master key (`GATEWAY_MASTER_KEY`, com no mínimo 32 caracteres, comparada em tempo constante). Só o backend e o proxy a conhecem.
+- **Segredos:**
+  - os apps de servidor (backend, proxy e destino simulado) leem as variáveis de um arquivo `.env.<ambiente>` (`development`, `testing` e `production`), no módulo de configuração do app;
+  - esses arquivos ficam fora do Git, e cada app versiona os modelos em `config/.env.<ambiente>.example`, com todas as variáveis;
+  - o segredo do JWT (`JWT_SECRET`) tem no mínimo 32 caracteres;
+  - o frontend não guarda segredos: a URL do backend fica no `environment.ts` do Angular.
+- **`npm run gate`:**
+  - typecheck nos apps em TypeScript (frontend, proxy e destino simulado) e no `examples/`;
+  - em todos os apps, lint com zero warnings, build (com o Babel, no backend), arch, testes (cobertura ≥ 80%) e deadcode. O `examples/` também passa pelo lint e pelo deadcode;
+  - gates de navegador, com Playwright e contra o ambiente do `./dev.sh`: um visual, que mede valores renderizados, e um e2e, que percorre fluxos de usuário;
+  - nenhum teste chama um provedor real.
+- **Convenções de código:** a mesma configuração do Prettier em todos os apps, nomes e comentários de teste em inglês, e nenhum comentário em código de produção.
+- **Dependências:** fixadas pelo lockfile de cada app e instaladas com `npm ci`. As imagens Docker são fixadas por digest.
 
 **Experiência:**
-- O desenvolvedor copia o `.env.example` para `.env` e preenche as chaves da OpenAI e do Google AI Studio, a master key, a chave de cifragem, o segredo de sessão e o e-mail e a senha do primeiro administrador.
-- Depois de `docker compose up`, em até 2 minutos todos os serviços ficam `healthy`, e o sistema abre em `http://127.0.0.1:3000`.
+- O desenvolvedor copia o modelo `config/.env.development.example` de cada app de servidor para `.env.development` e preenche as chaves da OpenAI e do Google AI Studio (no proxy), a master key (no backend e no proxy), a chave de cifragem, o segredo do JWT e o e-mail e a senha do primeiro administrador (no backend).
+- Depois de `./dev.sh`, com as dependências já instaladas, em até 2 minutos todos os serviços ficam `healthy`, e o sistema abre em `http://127.0.0.1:4200`.
 - Se faltar uma variável obrigatória, o serviço não sobe, e o log informa o nome da variável que falta.
 
 ### F02. Catálogo de capacidades
@@ -245,7 +276,7 @@ Todos os perfis trabalham num ambiente técnico interno, pelo navegador em deskt
 - Estado em tempo real de capacidades e deployments: ativo, suspenso ou em cooldown, com o horário de fim do cooldown (usado por F07, F08, F17)
 
 **Regras e limites:**
-- **Onde fica:** num arquivo versionado dentro de `services/ai-gateway`. A mudança no arquivo exige reiniciar o proxy; não há recarga a quente na v1.
+- **Onde fica:** num arquivo versionado dentro de `apps/ia`. A mudança no arquivo exige reiniciar o proxy; não há recarga a quente na v1.
 - **Capacidade:**
   - nome em kebab-case, de 3 a 40 caracteres, que descreva o uso esperado; nomes genéricos como `modelo-1` são proibidos;
   - tipo `chat` na v1 (o campo já existe para receber `embedding` na fase de RAG);
@@ -288,7 +319,7 @@ Todos os perfis trabalham num ambiente técnico interno, pelo navegador em deskt
 ### F03. Destino de IA simulado
 
 **Regras e limites:**
-- Servidor compatível com o `POST /v1/chat/completions` da OpenAI, disponível só na rede interna. Aceita qualquer Bearer.
+- É o app `apps/ia_simulator`: um servidor compatível com o `POST /v1/chat/completions` da OpenAI, disponível só na rede interna. Aceita qualquer Bearer.
 - **Modos por nome de modelo**, configurados por `POST /control/modes`:
   - `ok`: resposta fixa configurável;
   - `error`: status configurável entre 401, 429, 500, 502 e 503;
@@ -307,17 +338,30 @@ Todos os perfis trabalham num ambiente técnico interno, pelo navegador em deskt
 ### F04. Autenticação do sistema
 
 **Regras e limites:**
-- **Login:** e-mail único na plataforma, de até 254 caracteres, e senha com no mínimo 10 caracteres, guardada com hash argon2id.
-- **Papéis:** `platform_admin`, `domain_admin` e `user`. Todo `domain_admin` e todo `user` pertence a exatamente 1 domínio; o `platform_admin` não pertence a nenhum.
+- **Login:** e-mail de até 254 caracteres e senha de 10 a 64 caracteres, com no máximo 72 bytes em UTF-8, guardada com hash bcrypt (custo 10). O teto existe porque o bcrypt só considera os primeiros 72 bytes. A mesma regra vale para toda senha do sistema (F07, F09 e o primeiro administrador).
+- **Identidades e papéis:**
+  - o `platform_admin` é uma identidade de plataforma, guardada separada dos usuários dos domínios e sem domínio. As rotas exclusivas da plataforma (domínios, catálogo, e consumo e auditoria de todos os domínios) exigem essa identidade;
+  - os usuários de um domínio pertencem a exatamente 1 domínio e têm o papel `domain_admin` ou `user`;
+  - o e-mail é único entre as duas identidades. O login procura primeiro a identidade de plataforma e depois os usuários de domínio.
+- **Permissões de acesso:**
+  - cada papel concede um conjunto de permissões de acesso ao sistema no formato área + ação (`read`, `add`, `edit` ou `remove`), por exemplo `users` + `edit`. Elas não se confundem com as capacidades de IA permitidas a cada chave (F06 e F09);
+  - o catálogo de permissões de acesso é criado por migration, com identificadores numéricos fixos. Cada feature cria as permissões das áreas que introduz, numa faixa própria de identificadores (a centena do número da feature: a F04 usa de 400 a 499, a F09 de 900 a 999), e a spec da feature define quais papéis recebem cada uma;
+  - o `platform_admin` tem todas as permissões de acesso nas rotas que divide com os usuários de domínio, aplicadas ao domínio escolhido no seletor;
+  - toda rota do backend declara a permissão que exige, e o frontend esconde do menu e bloqueia nas rotas o que o usuário não pode usar;
+  - as permissões são lidas a cada requisição, então uma mudança de papel vale na requisição seguinte;
+  - o frontend obtém nome, papel, domínio e permissões em `GET /v2/me`, ao carregar e depois de um 403, e não do token guardado.
 - **Sessão:**
-  - cookie `httpOnly` e `SameSite=Lax`, com `Secure` quando houver HTTPS;
-  - dados da sessão no Redis;
-  - a sessão expira 8 horas após o login.
+  - o login emite um token JWT, que o frontend guarda no `localStorage` e envia no header `Authorization: Bearer`. O token é apagado ao sair ou ao receber 401;
+  - o token expira 8 horas após o login, e não há renovação;
+  - cada login cria uma sessão ativa no MySQL, conferida a cada requisição. Sair, ser removido ou ter o domínio desativado ou removido revoga a sessão, e o token deixa de valer na requisição seguinte;
+  - se a sessão não puder ser conferida porque o MySQL está indisponível, a requisição recebe 503, e o usuário continua logado.
 - **Bloqueio:** 5 tentativas erradas seguidas bloqueiam a conta por 15 minutos.
-- **Seed:** na inicialização, se não houver nenhum administrador da plataforma, o sistema cria um com `PLATFORM_ADMIN_EMAIL` e `PLATFORM_ADMIN_PASSWORD`. Se já houver, a seed é ignorada.
-- **Autorização:** toda rota é verificada por papel. O domínio vem sempre da sessão, nunca da URL ou do formulário.
-- **CSRF:** todos os formulários levam um token por sessão.
-- **Layout base:** cabeçalho com nome, papel, domínio e o botão Sair, e um menu que muda conforme o papel.
+- **Limite por IP:** no máximo 20 tentativas de login a cada 15 minutos por endereço IP, contadas no Redis. Sem o Redis, o login é recusado com 503, porque o limite não pode ser garantido. As demais requisições seguem, porque a sessão fica no MySQL.
+- **Primeiro administrador:** ao subir, o backend cria um administrador da plataforma com `PLATFORM_ADMIN_EMAIL` e `PLATFORM_ADMIN_PASSWORD` se não houver nenhum. Se já houver, nada é criado ou alterado. A senha segue as regras do login; se não seguir, o backend não sobe, e o log diz por quê.
+- **Domínio no login:** a F04 cria, no schema `web`, a tabela com a cópia dos domínios (id, nome e status), que a F07 preenche e atualiza. O login recusa o usuário de um domínio inativo ou removido.
+- **Autorização:** para usuários de domínio, o domínio vem sempre do token, nunca da URL ou do formulário. O domínio que o `platform_admin` escolhe num seletor é validado no backend.
+- **Acesso negado no frontend:** o backend devolve 403 quando falta permissão e 404 quando o recurso é de outro domínio ou não existe. O frontend leva o 401 ao login, mostra *"Você não tem permissão para acessar esta página."* no 403 e *"Página não encontrada."* no 404, inclusive quando a tela foi aberta pela URL.
+- **Layout base:** todas as telas seguem o design system do projeto (`docs/design-system/angular-material.md`), que a F04 cria a partir do design system de referência, sem nomes de outros sistemas. O shell tem cabeçalho com nome, papel, domínio e o botão Sair, menu lateral conforme as permissões, breadcrumbs e tema claro e escuro.
 
 **Experiência:**
 - A tela de login tem os campos e-mail e senha e o botão Entrar.
@@ -326,10 +370,10 @@ Todos os perfis trabalham num ambiente técnico interno, pelo navegador em deskt
 
 **Tratamento de erros:**
 - Credenciais erradas, inclusive e-mail inexistente: *"E-mail ou senha inválidos."*
-- Quinta tentativa errada: *"Conta bloqueada por 15 minutos após várias tentativas. Tente novamente às HH:MM."*
-- Sessão expirada: volta ao login com *"Sua sessão expirou. Entre novamente."*
-- Token CSRF inválido: 403 com *"A página expirou. Recarregue e tente novamente."*
-- Redis indisponível: *"Serviço temporariamente indisponível. Tente novamente em instantes."*, e o erro é registrado com o request ID.
+- Senha correta, mas domínio desativado ou removido: *"O domínio da sua conta está desativado. Fale com o administrador da plataforma."*
+- Proteção contra força bruta: na quinta tentativa errada, *"Conta bloqueada por 15 minutos após várias tentativas. Tente novamente às HH:MM."*; com mais de 20 tentativas do mesmo IP em 15 minutos, 429 com *"Muitas tentativas de login. Tente novamente em alguns minutos."*
+- Token expirado ou sessão revogada: volta ao login com *"Sua sessão expirou. Entre novamente."*
+- MySQL indisponível, ou Redis indisponível durante o login: 503 com *"Serviço temporariamente indisponível. Tente novamente em instantes."*, sem levar o usuário logado ao login, e o erro é registrado com o request ID.
 
 ### F05. Domínios
 
@@ -337,23 +381,40 @@ Todos os perfis trabalham num ambiente técnico interno, pelo navegador em deskt
 - F02: nomes das capacidades do catálogo
 
 **Fornece:**
-- Domínio: identificador, nome, status, capacidades habilitadas, budget mensal, RPM, TPM e cota diária padrão por capacidade (usado por F06, F07, F09)
+- Domínio: identificador, nome, status (ativo, inativo ou removido), capacidades habilitadas, budget mensal, RPM, TPM e cota diária padrão por capacidade (usado por F06, F07, F09)
 
 **Regras e limites:**
-- **API administrativa:** `POST /admin/domains`, `GET /admin/domains`, `GET` e `PATCH /admin/domains/{id}`, e `POST /admin/domains/{id}/deactivate` e `/activate`.
-- **Nome:** de 3 a 60 caracteres, único na plataforma.
+- **Dono e identificador:**
+  - o proxy é o dono do domínio: a tabela `dr_domain` fica no schema `gateway`, com id UUID guardado em binário (16 bytes);
+  - o backend guarda no schema `web` uma cópia do id, do nome e do status de cada domínio, sem chave estrangeira entre schemas, e as tabelas dele referenciam o domínio pela coluna `dr_domain_id`;
+  - a F07 atualiza a cópia no mesmo fluxo em que chama o proxy, e o login e o cabeçalho usam essa cópia.
+- **API administrativa:** `POST /admin/domains`, `GET /admin/domains`, `GET` e `PATCH /admin/domains/{id}`, e `POST /admin/domains/{id}/deactivate`, `/activate`, `/remove` e `/restore`.
+- **Nome:** de 3 a 60 caracteres, único entre os domínios não removidos.
 - **Capacidades habilitadas:** um subconjunto do catálogo. Se uma capacidade sai do catálogo, ela deixa de valer para o domínio.
 - **Padrões na criação:** budget de US$ 20/mês, 300 RPM, 500.000 TPM e cota diária padrão de 50.000 tokens por capacidade habilitada.
 - **Faixas aceitas:** budget de US$ 0 a 10.000; RPM de 1 a 10.000; TPM de 1.000 a 10.000.000; cota diária de 0 a 10.000.000 tokens.
-- **Desativação:** o domínio não é excluído na v1, apenas desativado, para preservar registros e auditoria. As chaves dele passam a receber 403 `domain_inactive` em até 1 s, porque o cache de validação é invalidado na hora.
+- **Desativação:** as chaves do domínio passam a receber 403 `domain_inactive` em até 1 s, porque o cache de validação é invalidado na hora.
+- **Transições de status:**
+  - ativo ↔ inativo, por `/deactivate` e `/activate`;
+  - ativo ou inativo → removido, por `/remove`;
+  - removido → inativo, por `/restore`;
+  - qualquer outra operação de escrita sobre um domínio removido, inclusive `PATCH`, `/activate`, `/deactivate` e criar ou editar chaves dele (F06), retorna 409 `invalid_state`. As leituras continuam permitidas e mostram o status removido.
+- **Remoção (lógica):**
+  - nenhum domínio é apagado do banco. A remoção marca o domínio como removido e guarda a data, o autor e o motivo;
+  - o pedido leva o nome digitado (`confirm_name`), o motivo (`reason`, até 200 caracteres) e o autor (`actor`, informado pelo backend, o único cliente da API administrativa). A API confere que o nome é idêntico, inclusive maiúsculas e minúsculas, e recusa o pedido se não for. A confirmação não depende só da tela;
+  - efeitos no proxy: as chaves recebem 403 `domain_inactive` em até 1 s, o domínio deixa de aparecer em `GET /admin/domains` (só aparece com `include_removed=true`, com data, autor e motivo) e o nome fica livre para um novo domínio;
+  - os registros de uso, as chaves e os limites continuam guardados, com as retenções de sempre;
+  - quem pode remover e os efeitos sobre usuários e sessões ficam na F07.
+- **Restauração:** o pedido leva o motivo (`reason`, até 200 caracteres) e o autor (`actor`). O domínio volta **inativo**, com as chaves e os limites que tinha, e precisa ser reativado de propósito. Se outro domínio já usa o nome, a restauração é recusada.
 
 **Experiência:**
 - A API devolve o domínio completo em JSON a cada operação. A operação humana é feita pela tela da F07.
 
 **Tratamento de erros:**
-- Nome duplicado: 409 `domain_name_taken`.
+- Nome já usado por um domínio não removido, na criação, na edição ou na restauração: 409 `domain_name_taken`.
 - Capacidade que não existe no catálogo: 400 `unknown_capability`, com o nome da capacidade.
-- Valor fora da faixa: 400 `invalid_value`, com o nome do campo.
+- Valor fora da faixa, ou motivo ausente ou acima de 200 caracteres: 400 `invalid_value`, citando o campo.
+- Nome de confirmação diferente do nome do domínio: 400 `confirmation_mismatch`. Operação que o status atual não permite: 409 `invalid_state`. Nos dois casos, nada é alterado.
 - Master key ausente ou errada: 401 `invalid_admin_key`.
 
 ### F06. Virtual keys e permissões
@@ -368,7 +429,7 @@ Todos os perfis trabalham num ambiente técnico interno, pelo navegador em deskt
 **Regras e limites:**
 - **Formato:** prefixo `gw_` seguido de 43 caracteres aleatórios (256 bits). O prefixo visível são os 8 primeiros caracteres.
 - **Armazenamento:** o MySQL guarda só o hash SHA-256 da chave. A comparação é feita em tempo constante, e toda consulta é parametrizada.
-- **Cache de validação:** fica no Redis por 60 s e é invalidado na hora quando a chave é revogada, editada ou regenerada, ou quando o domínio é desativado.
+- **Cache de validação:** fica no Redis por 60 s e é invalidado na hora quando a chave é revogada, editada ou regenerada, ou quando o domínio é desativado ou removido.
 - **Tipos de chave:**
   - chave de usuário: exatamente 1 por usuário, emitida pela F07 ou pela F09;
   - chave de aplicação: até 20 por domínio.
@@ -382,11 +443,11 @@ Todos os perfis trabalham num ambiente técnico interno, pelo navegador em deskt
 - **Exibição do valor:** o valor da chave só aparece na resposta da criação ou da regeneração.
 
 **Experiência:**
-- O sistema web cria, edita e revoga chaves pela API administrativa, e mostra ao administrador só o prefixo, o status, a expiração e o último uso.
+- O backend cria, edita e revoga chaves pela API administrativa, e as telas mostram ao administrador só o prefixo, o status, a expiração e o último uso.
 
 **Tratamento de erros:**
 - Chave ausente, inválida, revogada ou expirada: 401 `invalid_api_key`, *"Chave inválida, expirada ou revogada."*
-- Domínio inativo: 403 `domain_inactive`, *"O domínio desta chave está desativado."*
+- Domínio inativo ou removido: as chamadas ao `/v1` recebem 403 `domain_inactive`, *"O domínio desta chave está desativado."*, e criar ou editar chaves de um domínio removido retorna 409 `invalid_state`.
 - Capacidade fora da permissão efetiva: 403 `capability_not_allowed`, *"Esta chave não tem permissão para a capacidade 'x'."*
 - Operação sobre uma chave de outro domínio pela API: 404 `not_found`, sem revelar se a chave existe.
 - Mais de 20 chaves de aplicação no domínio: 409 `app_key_limit_reached`.
@@ -403,12 +464,29 @@ Todos os perfis trabalham num ambiente técnico interno, pelo navegador em deskt
 
 **Regras e limites:**
 - **Acesso:** só o `platform_admin`.
-- **Lista de domínios:** 25 por página, com nome, status, capacidades habilitadas, budget mensal e data de criação, e busca por nome.
-- **Criação de domínio:** num único formulário, o administrador informa o nome, as capacidades (checkboxes com o catálogo), o budget, o RPM, o TPM, a cota padrão por capacidade e o primeiro administrador do domínio (nome, e-mail e senha inicial).
+- **Lista de domínios:** 25 por página, com nome, status, capacidades habilitadas, budget mensal e data de criação, e busca por nome. Os domínios removidos só aparecem com o filtro "Mostrar removidos", com a data, o autor e o motivo da remoção.
+- **Domínios removidos no resto do sistema:** ficam fora do seletor de domínio do `platform_admin` (F09) e da tela Limites (F18), e continuam filtráveis, marcados como removidos, no consumo (F16) e na auditoria (F12), para consultar o histórico.
+- **Criação de domínio:** num único formulário, o administrador informa o nome, as capacidades (checkboxes com o catálogo), o budget, o RPM, o TPM, a cota padrão por capacidade e o primeiro administrador do domínio (nome, e-mail e senha inicial, com as regras de senha da F04).
   - O sistema cria o domínio, depois o usuário, depois a chave desse usuário.
-  - Se uma etapa falhar, as anteriores são desfeitas.
+  - Se uma etapa falhar, as anteriores são desfeitas. O domínio criado é removido (remoção lógica da F05) com o motivo "criação desfeita", então o nome fica livre para uma nova tentativa, e o usuário criado é apagado.
+  - Se essa compensação também falhar, vale a regra de falha no meio de uma ação, abaixo, e o domínio aparece como "criação incompleta".
 - **Edição:** os mesmos campos, exceto o primeiro administrador.
-- **Desativação:** exige digitar o nome do domínio para confirmar. As chaves param (F05), os usuários do domínio deixam de conseguir entrar, e as sessões ativas são encerradas em até 60 s. A reativação desfaz tudo isso.
+- **Desativação:** exige digitar o nome do domínio para confirmar. As chaves param (F05), os usuários do domínio deixam de conseguir entrar, e as sessões ativas são revogadas, então a requisição seguinte de qualquer usuário do domínio recebe 401.
+  - Ordem: o backend chama primeiro o proxy. Só depois que o proxy confirma, ele marca o domínio como inativo na cópia dele e revoga as sessões, numa transação. Se essa transação falhar, o backend reativa o domínio no proxy e mostra o erro. Com o proxy fora do ar, nada é alterado.
+  - Depois de um timeout na chamada ao proxy, o backend confere o status com `GET /admin/domains/{id}` antes de decidir.
+  - A reativação faz as chaves voltarem a funcionar (F05) e permite entrar de novo.
+- **Remoção:** exige duas confirmações seguidas.
+  - A primeira é um diálogo que explica as consequências, com os botões Cancelar e Continuar.
+  - A segunda pede o nome do domínio e um motivo de até 200 caracteres. O botão Remover domínio só se habilita quando o nome digitado é idêntico ao do domínio, inclusive maiúsculas e minúsculas, e o motivo está preenchido.
+  - O backend repete a conferência do nome antes de chamar o proxy (F05) e envia o autor.
+  - Efeitos no backend: os usuários do domínio deixam de conseguir entrar, e as sessões são revogadas. Os usuários continuam guardados, e os e-mails deles continuam ocupados.
+  - Ordem: o backend chama primeiro o proxy. Só depois que o proxy confirma, ele marca a cópia como removida e revoga as sessões, numa transação. Se essa transação falhar, o backend restaura o domínio no proxy e, se ele estava ativo, o reativa. Depois de um timeout, o backend confere o status com `GET /admin/domains/{id}` antes de decidir.
+  - Um usuário de domínio que chama as rotas de remoção ou de restauração do backend recebe 403.
+- **Restauração:** na lista com o filtro "Mostrar removidos", a ação Restaurar pede uma confirmação e um motivo de até 200 caracteres. A ordem é a mesma da remoção: proxy primeiro, depois a cópia, com a mesma conferência depois de um timeout. Se a transação do backend falhar, o backend remove o domínio de novo no proxy. O domínio volta inativo, com os usuários que tinha, e a reativação continua sendo um passo separado.
+- **Falha no meio de uma ação:** vale para criação, desativação, remoção e restauração.
+  - Quando o proxy já aplicou a ação e o backend não consegue concluir a parte dele, o backend desfaz a ação no proxy. Essa é a compensação: ela envia o nome do domínio como confirmação e, quando o proxy exige motivo, usa "<ação> desfeita" (por exemplo, "remoção desfeita").
+  - As compensações geram eventos de auditoria como qualquer ação (F12).
+  - Se a compensação também falhar, prevalece o status do proxy, que é o dono do domínio. O backend tenta de novo aplicar a parte dele até conseguir, e a lista marca o domínio como "sincronização pendente" enquanto isso. A exceção é uma criação desfeita que não pôde ser compensada: ela aparece como "criação incompleta" e pode ser removida pela lista.
 - **Catálogo:** uma tabela de capacidades e deployments, com provedor, modelo físico, preço, estado (ativo, suspenso, em cooldown até HH:MM:SS) e os botões Suspender e Reativar.
   - A suspensão exige um motivo de até 200 caracteres, que vai para a auditoria.
   - A tabela se atualiza a cada 10 s.
@@ -417,13 +495,18 @@ Todos os perfis trabalham num ambiente técnico interno, pelo navegador em deskt
 **Experiência:**
 - O menu Domínios abre a lista, onde o botão "Novo domínio" leva ao formulário. Ao salvar, o sistema mostra *"Domínio 'X' criado. O administrador já pode entrar com o e-mail informado."*
 - O menu Catálogo mostra a tabela. Suspender abre uma confirmação com o campo de motivo e, ao confirmar, o estado muda para "suspenso" em até 1 s.
+- Remover um domínio:
+  - o primeiro diálogo diz *"Remover o domínio 'X'? Os usuários perdem o acesso, as chaves param de funcionar e o domínio sai da lista. O histórico de uso e a auditoria são mantidos, e o domínio pode ser restaurado."*;
+  - o segundo diz *"Para confirmar, digite o nome do domínio: X"*;
+  - ao concluir, o sistema mostra *"Domínio 'X' removido."*
+- Restaurar mostra *"Domínio 'X' restaurado como inativo. Reative-o quando quiser liberar o acesso."*
 
 **Tratamento de erros:**
-- Proxy inacessível: *"Não foi possível falar com o gateway. Nada foi alterado."*, sem deixar estado parcial.
+- Proxy inacessível antes da primeira escrita: *"Não foi possível falar com o gateway. Nada foi alterado."*, sem deixar estado parcial. Se o proxy cair no meio de uma ação e a compensação falhar, a tela mostra *"A operação no domínio 'X' ficou incompleta. O sistema conclui a sincronização quando o gateway voltar."* No caso da criação, a mensagem é *"O domínio 'X' ficou incompleto. Remova-o pela lista quando o gateway voltar."*
 - Falha ao criar o primeiro administrador ou a chave dele: o domínio é desfeito, e o sistema mostra *"O domínio não foi criado: <motivo>."*
-- Nome de domínio duplicado: mensagem no campo, *"Já existe um domínio com este nome."*
+- Nome já usado por outro domínio: na criação, mensagem no campo, *"Já existe um domínio com este nome."*; na restauração, *"Já existe um domínio com este nome. Renomeie o outro domínio antes de restaurar este."*
 - E-mail do primeiro administrador já em uso: mensagem no campo, *"Este e-mail já está em uso."*
-- Confirmação de desativação com nome errado: o botão continua desabilitado.
+- Confirmação de desativação ou de remoção com nome errado: o botão continua desabilitado.
 
 ### F08. Endpoint compatível com OpenAI
 
@@ -467,7 +550,7 @@ Todos os perfis trabalham num ambiente técnico interno, pelo navegador em deskt
 | 504 | `upstream_timeout` | `false` (o gateway já tentou) |
 
 **Experiência:**
-- O desenvolvedor configura o SDK oficial da OpenAI com `baseURL: http://127.0.0.1:4000/v1`, a chave de aplicação e `model: "developer-assistant"`, e recebe a resposta com `model: "developer-assistant"` e o header `x-request-id`.
+- O desenvolvedor configura o SDK oficial da OpenAI com `baseURL: http://127.0.0.1:3131/v1`, a chave de aplicação e `model: "developer-assistant"`, e recebe a resposta com `model: "developer-assistant"` e o header `x-request-id`.
 - A chamada é idêntica se o catálogo trocar o modelo físico.
 
 **Tratamento de erros:**
@@ -480,7 +563,7 @@ Todos os perfis trabalham num ambiente técnico interno, pelo navegador em deskt
 ### F09. Gestão de usuários, permissões e chaves de aplicação
 
 **Consome:**
-- F05: capacidades habilitadas e cota diária padrão do domínio
+- F05: status, capacidades habilitadas e cota diária padrão do domínio
 - F06: chaves do domínio para administração
 
 **Fornece:**
@@ -489,8 +572,8 @@ Todos os perfis trabalham num ambiente técnico interno, pelo navegador em deskt
 - Eventos administrativos: autor, papel, domínio, ação, alvo, valores anteriores e novos, request ID e data (usado por F12)
 
 **Regras e limites:**
-- **Acesso:** o `domain_admin` gerencia só o próprio domínio. O `platform_admin` escolhe qualquer domínio num seletor.
-- **Usuário:** nome de 2 a 100 caracteres, e-mail único na plataforma, senha inicial com no mínimo 10 caracteres e papel (`domain_admin` ou `user`). O limite é de 500 usuários por domínio.
+- **Acesso:** o `domain_admin` gerencia só o próprio domínio. O `platform_admin` escolhe qualquer domínio não removido num seletor.
+- **Usuário:** nome de 2 a 100 caracteres, e-mail único na plataforma, senha inicial com as regras de senha da F04 e papel (`domain_admin` ou `user`). O papel define o conjunto de permissões do usuário (F04). O limite é de 500 usuários por domínio.
 - **Chave do usuário:** criar um usuário emite a chave dele no proxy. O sistema guarda a chave cifrada com AES-256-GCM (`KEY_ENCRYPTION_KEY`) e nunca a exibe.
 - **Permissões por usuário:**
   - capacidades permitidas, entre as habilitadas no domínio;
@@ -502,7 +585,7 @@ Todos os perfis trabalham num ambiente técnico interno, pelo navegador em deskt
   - o valor é exibido uma única vez, com um botão Copiar;
   - a lista mostra nome, prefixo, status, expiração e último uso, com as ações editar, regenerar (o novo valor também aparece uma única vez) e revogar.
 - **Remoção de usuário:**
-  - revoga a chave dele e encerra as sessões em até 60 s;
+  - revoga a chave dele e as sessões dele, e o token que ele estiver usando recebe 401 na requisição seguinte;
   - os registros de uso e a auditoria são preservados, com o usuário marcado como removido.
 - **Proteções:** um `domain_admin` não pode remover a si mesmo, nem remover o último `domain_admin` do domínio.
 - **Auditoria:** cada alteração gera um evento administrativo com os valores anteriores e os novos.
@@ -564,12 +647,12 @@ Todos os perfis trabalham num ambiente técnico interno, pelo navegador em deskt
 - Chamadas às capacidades em nome do usuário logado: capacidades permitidas, resposta, uso de tokens, latência, request ID e erro traduzido (usado por F15)
 
 **Regras e limites:**
-- **Um único módulo no sistema web**, sobre o SDK oficial `openai`:
-  - `baseURL` do proxy na rede interna (`http://ai-gateway:4000/v1`);
+- **Um único módulo no backend** (`apps/backend/src/services/`), sobre o SDK oficial `openai`:
+  - `baseURL` do proxy na rede interna (`http://ia:3131/v1`);
   - `maxRetries: 0`, porque quem tenta de novo é o proxy;
   - timeout do cliente igual ao prazo total da capacidade mais 5 s.
 - **Chave do usuário:** decifrada só em memória, no momento da chamada, e nunca registrada em log.
-- **Request ID:** o módulo repassa o request ID do sistema web ao proxy.
+- **Request ID:** o módulo repassa o request ID do backend ao proxy.
 - **Capacidades permitidas:** vêm do `GET /v1/models` com a chave do usuário, em cache por 60 s.
 - **Tradução de erros:** toda mensagem termina com *"Código para suporte: <request id>"*.
 
@@ -583,15 +666,15 @@ Todos os perfis trabalham num ambiente técnico interno, pelo navegador em deskt
 | `upstream_error`, `upstream_timeout` | *"O provedor de IA não conseguiu responder. Tente novamente."* |
 | proxy inacessível | *"Não foi possível falar com o gateway. Tente novamente em instantes."* |
 
-- **Script de exemplo** (`examples/ask.ts`), que reproduz o `main.py` da aula:
-  - lê `AI_GATEWAY_URL`, `AI_GATEWAY_KEY` (chave de aplicação) e `AI_GATEWAY_MODEL`;
+- **Script de exemplo** (`examples/ask.ts`, num pacote próprio com `openai` e `tsx`), que reproduz o `main.py` da aula:
+  - lê `AI_GATEWAY_URL` (padrão `http://127.0.0.1:3131/v1`), `AI_GATEWAY_KEY` (chave de aplicação) e `AI_GATEWAY_MODEL`;
   - usa o system prompt e a pergunta padrão da aula, ou a pergunta recebida como argumento;
   - imprime a capacidade, a pergunta, a resposta, os tokens e o request ID;
   - o modo `--ticket` envia a mensagem da demo D7 para o `ticket-classifier` e informa se o JSON veio válido.
 
 **Experiência:**
 - **No sistema:** o usuário não percebe o módulo. Ele vê só a resposta ou a mensagem traduzida, sempre com o request ID.
-- **No terminal:** o desenvolvedor roda `npx tsx examples/ask.ts "O que é uma AI Gateway?"` e vê a capacidade, a resposta e o request ID.
+- **No terminal:** o desenvolvedor roda `cd examples && npx tsx ask.ts "O que é uma AI Gateway?"` e vê a capacidade, a resposta e o request ID.
 
 ### F12. Auditoria administrativa
 
@@ -602,16 +685,21 @@ Todos os perfis trabalham num ambiente técnico interno, pelo navegador em deskt
 **Regras e limites:**
 - **Ações registradas:**
   - criar, editar, desativar e reativar um domínio;
+  - remover e restaurar um domínio, com o motivo, inclusive as compensações automáticas da F07;
   - suspender e reativar uma capacidade ou um deployment, com o motivo;
   - criar, editar e remover um usuário;
   - alterar permissões, cotas, budgets e limites;
   - criar, editar, regenerar e revogar uma chave.
-- **Campos de cada evento:** data e hora, autor (nome e papel), domínio, ação, alvo, valores anteriores e novos, request ID e resultado (sucesso ou falha). Senhas e valores de chave nunca são registrados.
-- **Consistência:** uma ação administrativa só é concluída se o seu evento de auditoria for gravado.
-- **Imutabilidade:** os eventos não podem ser editados nem excluídos pela aplicação. A retenção é de 90 dias.
+- **Campos de cada evento:** data e hora, autor (nome e papel), domínio, ação, alvo, valores anteriores e novos, request ID e resultado (pendente, sucesso ou falha). Senhas e valores de chave nunca são registrados.
+- **Consistência:** uma ação administrativa só é concluída se o seu evento de auditoria for gravado. Os eventos ficam na tabela `audit_logs` do schema `web`:
+  - ações que mudam só dados do backend (papéis e sessões) gravam o evento na mesma transação da ação;
+  - toda ação que chama a API administrativa do proxy, inclusive as que também mudam o backend (criar e remover usuário, desativar, remover e restaurar domínio), grava o evento como pendente antes da chamada e o marca como sucesso ou falha depois. Se o evento não puder ser gravado, o proxy não é chamado;
+  - um evento que continua pendente depois de 5 minutos aparece na tela como "resultado desconhecido";
+  - o evento de uma ação que falhou continua gravado, fora da transação que foi desfeita.
+- **Imutabilidade:** a única alteração permitida é a troca, uma única vez, do resultado pendente para sucesso ou falha. Fora isso, os eventos não podem ser editados nem excluídos pela aplicação. A retenção é de 90 dias.
 - **Escopo:** o `domain_admin` vê só o seu domínio; o `platform_admin` vê todos.
 - **Tela:**
-  - filtros por período (até 90 dias), autor, ação e alvo;
+  - filtros por período (até 90 dias), autor, ação e alvo, e, para o `platform_admin`, por domínio, inclusive os removidos, marcados como tal;
   - 50 eventos por página, dos mais recentes aos mais antigos;
   - o detalhe mostra os valores anteriores e os novos, lado a lado.
 
@@ -626,7 +714,7 @@ Todos os perfis trabalham num ambiente técnico interno, pelo navegador em deskt
 - F10: totais acumulados de tokens e de gasto
 
 **Fornece:**
-- Situação de cota e budget por chave: para cada capacidade, tokens usados, restantes, percentual e horário de renovação; e o budget mensal usado, restante e o percentual, da chave e do domínio (usado por F18)
+- Situação de cota e budget por chave: para cada capacidade, tokens usados, restantes, percentual e horário de renovação; e o budget mensal usado, restante e o percentual, da chave e do domínio, com o status do domínio (usado por F18)
 - Decisão de gasto no deployment de fallback: permitido ou teto atingido (usado por F17)
 
 **Regras e limites:**
@@ -778,7 +866,7 @@ Todos os perfis trabalham num ambiente técnico interno, pelo navegador em deskt
 
 **Consome:**
 - F09: usuários e chaves do domínio, com nome, e-mail, papel, tipo de chave e identificador da chave
-- F13: situação de cota e budget por chave
+- F13: situação de cota e budget por chave, com o status do domínio
 
 **Escopo essencial:**
 - Saldo de cota e de budget visível para o usuário e para os administradores.
@@ -794,7 +882,7 @@ Todos os perfis trabalham num ambiente técnico interno, pelo navegador em deskt
   - o alerta aparece para o usuário dono da chave, uma vez por limite em cada período, e pode ser dispensado;
   - só dentro do sistema, sem e-mail.
 - **Administrador do domínio:** a tela Limites lista os usuários e as chaves com ≥ 80% em alguma cota ou budget, ordenados pelo percentual, e mostra o budget do domínio.
-- **Administrador da plataforma:** a mesma tela mostra os domínios com ≥ 80% do budget e a situação do teto global.
+- **Administrador da plataforma:** a mesma tela mostra os domínios não removidos com ≥ 80% do budget e a situação do teto global.
 
 **Experiência:**
 - O painel mostra, por exemplo, *"ticket-classifier: 41.200 de 50.000 tokens (82%). Renova às 00:00."*, com a barra em amarelo.
@@ -806,6 +894,8 @@ Todos os perfis trabalham num ambiente técnico interno, pelo navegador em deskt
 - Servidores de IA próprios, e o balanceamento entre vários destinos no pool primário.
 - A regra, por capacidade, de poder ou não usar um destino externo.
 - Várias réplicas do proxy e alta disponibilidade. A v1 roda 1 réplica, mas os limites já usam o Redis de forma atômica.
+- Proxy reverso e balanceamento entre réplicas do backend.
+- Separação física entre leitura e escrita no MySQL. O código já usa conexões distintas, mas as duas apontam para o mesmo banco.
 
 **Recursos da API**
 - Streaming (`stream: true`), tool calling, `n` maior que 1 e entrada de imagem, áudio ou arquivo. Todos são recusados com 400 `unsupported_parameter`.
@@ -823,15 +913,20 @@ Todos os perfis trabalham num ambiente técnico interno, pelo navegador em deskt
 
 **Identidade e multi-tenant**
 - SSO, autenticação em dois fatores, recuperação de senha por e-mail e cadastro público.
+- Renovação do token de login. Depois de 8 horas, o usuário entra de novo.
+- reCAPTCHA no login, impersonação e troca de domínio pela equipe da plataforma.
+- Grupos de permissões de acesso e permissões de acesso escolhidas uma a uma por usuário. Na v1, o papel define o que cada usuário pode fazer no sistema.
 - Usuário em mais de um domínio, níveis acima do domínio e cadastro de domínios por autoatendimento.
 - Chaves de provedor próprias por domínio (BYOK) e catálogo diferente por domínio.
-- Chaves administrativas por domínio no proxy. Na v1, só o sistema web tem a master key.
-- Exclusão definitiva de domínios. A v1 apenas desativa.
+- Chaves administrativas por domínio no proxy. Na v1, só o backend tem a master key.
+- Exclusão física de domínios. A remoção é lógica: o registro fica guardado e pode ser restaurado.
+- Expurgo automático de domínios removidos depois de um prazo.
 
 **Registro e notificações**
 - Gravação do conteúdo de prompts e respostas.
 - Header de sinalização de violação de contrato e correção automática de respostas fora do formato.
 - Notificações por e-mail, Slack ou outro canal fora do sistema.
+- Atualização em tempo real por WebSocket. As telas que se atualizam sozinhas fazem consultas periódicas.
 
 ## 8. Grafo de Dependências
 
@@ -858,8 +953,8 @@ Todos os perfis trabalham num ambiente técnico interno, pelo navegador em deskt
 
 ### Funcionalidades de Fundação
 Estas funcionalidades montam a infraestrutura compartilhada do projeto. Num projeto greenfield, elas precisam ser implementadas em sequência, antes ou junto de qualquer funcionalidade que dependa delas:
-- **F01 Fundação: monorepo e ambiente local** — cria os workspaces (`apps/web`, `services/ai-gateway`, `packages/contract`), o `docker compose` com MySQL e Redis, os health checks, o middleware de request ID, a autenticação da API administrativa por master key e a extensão dos gates para os dois serviços.
-- **F04 Autenticação do sistema** — cria a camada de sessão no Redis, o middleware de autorização por papel, a proteção CSRF e o layout base com menu por papel, usados por todas as telas do sistema web.
+- **F01 Fundação: monorepo e ambiente local** — cria os apps (`apps/frontend`, `apps/backend`, `apps/ia` e `apps/ia_simulator`) e as ferramentas da raiz, os dois arquivos compose com MySQL e Redis e o `./dev.sh`, as migrations, os health checks, o middleware de request ID, o CORS do backend, a autenticação da API administrativa por master key, o mecanismo de contratos em `contracts/`, o pacote `examples/` e os gates de todos os apps.
+- **F04 Autenticação do sistema** — cria o login com JWT e sessões ativas, a cópia dos domínios no backend, o catálogo de permissões e o middleware de autorização do backend, o `GET /v2/me`, o guard de rotas e o tratamento de erros do frontend, o design system do projeto e o shell do frontend (cabeçalho, menu por permissão, tema), usados por todas as telas do sistema web.
 
 ### Ondas de Execução
 As funcionalidades de uma mesma onda podem ser construídas em paralelo. Uma onda só começa depois que todas as funcionalidades das ondas anteriores estiverem concluídas.
@@ -923,12 +1018,17 @@ graph TD
 ## 9. Critérios de Aceite
 
 ### F01. Fundação: monorepo e ambiente local
-- [ ] `docker compose up` deixa proxy, sistema web, MySQL, Redis e destino simulado `healthy` em até 2 minutos.
-- [ ] Só as portas `127.0.0.1:3000` (sistema web) e `127.0.0.1:4000` (proxy) ficam publicadas no host. Nada é publicado em `0.0.0.0`.
+- [ ] Com as dependências já instaladas, `./dev.sh` deixa frontend, backend, proxy, destino simulado, MySQL e Redis `healthy` em até 2 minutos, com as migrations aplicadas, e `./dev.sh --down` para todos os containers dos dois arquivos compose.
+- [ ] O usuário MySQL do backend não consegue ler o schema `gateway`, e o do proxy não consegue ler o schema `web`.
+- [ ] Cada app de servidor versiona `config/.env.<ambiente>.example` com todas as variáveis que o seu módulo de configuração lê.
+- [ ] Só as portas `127.0.0.1:4200` (frontend), `127.0.0.1:3030` (backend) e `127.0.0.1:3131` (proxy) ficam publicadas no host, mais `127.0.0.1:3306` (MySQL) e `127.0.0.1:6379` (Redis) no ambiente de desenvolvimento. Nada é publicado em `0.0.0.0`, e o destino simulado não é acessível a partir do host.
+- [ ] Cada app tem o próprio `package.json` e lockfile, e o `package.json` da raiz não declara workspaces.
 - [ ] Um serviço iniciado sem uma variável obrigatória não sobe, e o log mostra o nome da variável.
-- [ ] Toda resposta dos dois serviços traz `x-request-id` com 32 caracteres hexadecimais minúsculos. Um ID válido recebido é devolvido igual; um ID inválido é substituído.
+- [ ] Toda resposta do backend e do proxy traz `x-request-id` com 32 caracteres hexadecimais minúsculos. Um ID válido recebido é devolvido igual; um ID inválido é substituído.
 - [ ] `/admin/*` responde 401 sem a master key e 401 com uma master key errada.
-- [ ] `npm run gate` passa nos três workspaces, e o gate `arch` falha se o proxy importar código do sistema web, ou vice-versa.
+- [ ] Mudar no proxy um código de erro, um header ou um campo de resposta que o backend usa faz um teste de contrato falhar.
+- [ ] O backend recusa pelo CORS uma requisição vinda de outra origem que não a do frontend, e o frontend consegue ler o header `x-request-id` das respostas.
+- [ ] `npm run gate` passa em todos os apps, e o gate `arch` falha se um app importar código de outro.
 - [ ] Nenhum teste da suíte faz chamada de rede para a OpenAI ou para o Google.
 
 ### F02. Catálogo de capacidades
@@ -949,13 +1049,22 @@ graph TD
 
 ### F04. Autenticação do sistema
 - [ ] Na primeira inicialização, o administrador da plataforma é criado com `PLATFORM_ADMIN_EMAIL` e `PLATFORM_ADMIN_PASSWORD`. Numa segunda inicialização, nenhum usuário é criado ou alterado.
+- [ ] O backend não sobe com `PLATFORM_ADMIN_PASSWORD` fora das regras de senha, e o log diz qual regra falhou.
+- [ ] Uma senha de até 64 caracteres que passa de 72 bytes em UTF-8 é recusada.
+- [ ] Um usuário de um domínio desativado ou removido que acerta a senha vê *"O domínio da sua conta está desativado. Fale com o administrador da plataforma."*
+- [ ] `GET /v2/me` devolve nome, papel, domínio e permissões do usuário logado, e o menu reflete uma mudança de papel depois do primeiro 403.
 - [ ] O login correto leva o `platform_admin` para Domínios, o `domain_admin` para Usuários e o `user` para o Playground.
 - [ ] Senha errada e e-mail inexistente mostram a mesma mensagem, *"E-mail ou senha inválidos."*
 - [ ] A 5ª tentativa errada seguida bloqueia a conta por 15 minutos, inclusive para a senha correta.
 - [ ] Uma sessão com mais de 8 horas é recusada e leva ao login com *"Sua sessão expirou. Entre novamente."*
-- [ ] Um formulário enviado sem token CSRF válido recebe 403.
-- [ ] Um `user` que acessa uma rota de administração recebe 403.
-- [ ] A senha é guardada com argon2id e nunca aparece em logs.
+- [ ] Uma requisição ao backend sem token, com token adulterado ou com a sessão revogada recebe 401.
+- [ ] Depois de Sair, o mesmo token recebe 401 na requisição seguinte.
+- [ ] A 21ª tentativa de login do mesmo IP em 15 minutos recebe 429.
+- [ ] Um `user` que acessa uma rota de administração recebe 403, o menu dele não mostra as telas de administração, e a tela aberta pela URL mostra *"Você não tem permissão para acessar esta página."*
+- [ ] Com o MySQL parado, a requisição de um usuário logado recebe 503, e o frontend mostra *"Serviço temporariamente indisponível. Tente novamente em instantes."* sem levá-lo ao login.
+- [ ] Com o Redis parado, o login recebe 503, e as requisições de um usuário já logado não recebem 401 nem 503 por causa da sessão. As telas que dependem do proxy mostram a mensagem de indisponibilidade da F11.
+- [ ] Um e-mail que já existe como administrador da plataforma não pode ser usado por um usuário de domínio, e vice-versa.
+- [ ] A senha é guardada com bcrypt e nunca aparece em logs.
 
 ### F05. Domínios
 - [ ] Criar um domínio sem informar limites aplica US$ 20/mês, 300 RPM, 500.000 TPM e 50.000 tokens/dia por capacidade habilitada.
@@ -963,6 +1072,11 @@ graph TD
 - [ ] Habilitar uma capacidade que não existe no catálogo retorna 400 `unknown_capability` com o nome dela.
 - [ ] Um budget de US$ 10.001 retorna 400 `invalid_value` citando o campo.
 - [ ] Depois de desativar um domínio, qualquer chave dele recebe 403 `domain_inactive` em até 1 s, e reativá-lo restabelece as chaves em até 1 s.
+- [ ] Remover um domínio com o nome de confirmação correto e um motivo faz as chaves dele receberem 403 `domain_inactive` em até 1 s, e o registro continua no banco, marcado como removido, com data, autor e motivo.
+- [ ] Remover com um nome de confirmação diferente, inclusive só na caixa das letras, retorna 400 `confirmation_mismatch`, e o domínio não muda.
+- [ ] Depois da remoção, é possível criar um novo domínio com o mesmo nome.
+- [ ] Restaurar um domínio removido o devolve inativo, com as mesmas chaves e limites. Restaurá-lo sem motivo retorna 400 `invalid_value`, e restaurá-lo quando outro domínio já usa o nome retorna 409 `domain_name_taken`.
+- [ ] `PATCH` ou `/activate` num domínio removido retornam 409 `invalid_state`, e o domínio não muda. `GET /admin/domains/{id}` continua respondendo, com o status removido.
 
 ### F06. Virtual keys e permissões
 - [ ] A chave criada tem o prefixo `gw_` e 43 caracteres aleatórios. O MySQL guarda só o hash SHA-256, e o valor não aparece em nenhuma tabela.
@@ -971,18 +1085,26 @@ graph TD
 - [ ] Uma chave expirada recebe 401. Depois da regeneração, o valor antigo recebe 401, e o novo funciona com as mesmas permissões.
 - [ ] O último uso é atualizado até 60 s depois de uma chamada autenticada.
 - [ ] A 21ª chave de aplicação de um domínio retorna 409 `app_key_limit_reached`.
+- [ ] Criar ou editar uma chave de um domínio removido retorna 409 `invalid_state`.
 - [ ] Uma chamada à API administrativa com o identificador de um domínio sobre uma chave de outro domínio retorna 404.
 - [ ] Um header ou campo que tente informar outro domínio numa chamada ao `/v1` é ignorado: o domínio vem sempre da chave.
 
 ### F07. Administração da plataforma
 - [ ] Criar um domínio com o primeiro administrador permite que esse administrador entre logo em seguida com o e-mail e a senha informados.
-- [ ] Se a emissão da chave do primeiro administrador falhar, nem o domínio nem o usuário ficam gravados, e a tela mostra *"O domínio não foi criado: <motivo>."*
-- [ ] Desativar um domínio impede o login dos seus usuários e encerra as sessões ativas em até 60 s.
+- [ ] Se a emissão da chave do primeiro administrador falhar, o usuário não fica gravado, o domínio fica removido com o motivo "criação desfeita", a tela mostra *"O domínio não foi criado: <motivo>."*, e uma nova tentativa com o mesmo nome funciona.
+- [ ] Desativar um domínio impede o login dos seus usuários, e a requisição seguinte de um usuário já logado recebe 401.
 - [ ] O botão de desativar só se habilita depois de digitar o nome exato do domínio.
+- [ ] Remover um domínio pela tela exige as duas confirmações. Na segunda, o botão Remover domínio só se habilita com o nome idêntico, inclusive na caixa das letras, e o motivo preenchido.
+- [ ] Um domínio removido some da lista e só aparece com o filtro "Mostrar removidos", com data, autor e motivo. Os usuários dele não conseguem entrar.
+- [ ] Restaurar pela tela exige um motivo e devolve o domínio inativo, com os mesmos usuários. Só a reativação libera o acesso dos usuários e das chaves. Com o nome já usado por outro domínio, a tela mostra *"Já existe um domínio com este nome. Renomeie o outro domínio antes de restaurar este."*
+- [ ] Um `domain_admin` que chama a rota de remoção ou de restauração do backend recebe 403.
+- [ ] Se a transação do backend falhar depois que o proxy removeu um domínio ativo, o domínio volta a ficar ativo no proxy e na cópia do backend.
+- [ ] Se a compensação de uma criação desfeita falhar, o domínio aparece na lista como "criação incompleta", a tela mostra *"O domínio 'X' ficou incompleto. Remova-o pela lista quando o gateway voltar."*, e o evento de auditoria fica como falha.
+- [ ] Se uma remoção e a compensação dela falharem, a lista marca o domínio como "sincronização pendente", e a cópia do backend passa a removida assim que o backend consegue concluir a parte dele.
 - [ ] A tabela do catálogo mostra cada deployment como ativo, suspenso ou em cooldown até HH:MM:SS, atualizada a cada 10 s.
 - [ ] Suspender o deployment da OpenAI de `developer-assistant` pela tela faz as chamadas seguintes serem atendidas pelo Gemini, sem reiniciar nada (a demo D6 em um clique).
 - [ ] Suspender sem informar o motivo não é possível.
-- [ ] Com o proxy fora do ar, qualquer operação mostra *"Não foi possível falar com o gateway. Nada foi alterado."*
+- [ ] Com o proxy fora do ar desde o início, qualquer operação mostra *"Não foi possível falar com o gateway. Nada foi alterado."*
 
 ### F08. Endpoint compatível com OpenAI
 - [ ] O SDK oficial da OpenAI, apenas com `baseURL` e a chave trocadas, recebe uma resposta de `developer-assistant` com `model: "developer-assistant"` (demo D4).
@@ -999,8 +1121,9 @@ graph TD
 - [ ] Criar um usuário já emite a chave dele. A tela nunca mostra o valor, e o banco do sistema guarda a chave cifrada com AES-256-GCM.
 - [ ] A tabela de capacidades do novo usuário vem preenchida com a cota padrão do domínio e só mostra as capacidades habilitadas no domínio.
 - [ ] O valor de uma chave de aplicação aparece uma única vez, e reabrir a chave mostra só o prefixo.
-- [ ] Remover um usuário faz a chave dele receber 401 na chamada seguinte, e as sessões dele terminam em até 60 s.
+- [ ] Remover um usuário faz a chave dele receber 401 na chamada seguinte, e o token de login dele recebe 401 na requisição seguinte.
 - [ ] Um `domain_admin` não consegue remover a si mesmo nem o último `domain_admin` do domínio.
+- [ ] Mudar o papel de um usuário de `domain_admin` para `user` tira dele o acesso às telas de administração na requisição seguinte.
 - [ ] Um `domain_admin` do domínio A que abre pela URL um usuário do domínio B recebe 404.
 - [ ] Se a emissão da chave no proxy falhar, o usuário não é criado, e a tela mostra *"Não foi possível criar a chave do usuário no gateway. Nada foi salvo."*
 
@@ -1016,8 +1139,8 @@ graph TD
 ### F11. Cliente do gateway e script de exemplo
 - [ ] O cliente do sistema web faz exatamente 1 requisição ao proxy por ação do usuário, inclusive quando o proxy responde 429 ou 503 (`maxRetries: 0`).
 - [ ] Cada código de erro do proxy aparece para o usuário com a mensagem da tabela e com *"Código para suporte: <request id>"*.
-- [ ] `npx tsx examples/ask.ts` com uma chave de aplicação imprime a capacidade, a pergunta padrão da aula, a resposta, os tokens e o request ID (demo D1 refeita pelo gateway).
-- [ ] `npx tsx examples/ask.ts --ticket` envia a mensagem da demo D7 ao `ticket-classifier` e informa se o JSON veio válido.
+- [ ] `cd examples && npx tsx ask.ts` com uma chave de aplicação imprime a capacidade, a pergunta padrão da aula, a resposta, os tokens e o request ID (demo D1 refeita pelo gateway).
+- [ ] `cd examples && npx tsx ask.ts --ticket` envia a mensagem da demo D7 ao `ticket-classifier` e informa se o JSON veio válido.
 - [ ] A chave decifrada do usuário não aparece em nenhum log do sistema web.
 
 ### F12. Auditoria administrativa
@@ -1025,8 +1148,10 @@ graph TD
 - [ ] Um evento de criação de chave não contém o valor da chave, e um evento de criação de usuário não contém a senha.
 - [ ] O `domain_admin` do domínio A não vê nenhum evento do domínio B, nem pela URL.
 - [ ] O `platform_admin` vê os eventos de todos os domínios e as suspensões do catálogo, com o motivo.
+- [ ] Remover e restaurar um domínio geram eventos com o autor, o motivo e o status anterior e o novo.
+- [ ] Um evento que fica pendente por mais de 5 minutos aparece na tela como "resultado desconhecido".
 - [ ] Se a gravação do evento falhar, a ação administrativa não é concluída, e a tela informa o erro.
-- [ ] Não há na aplicação nenhuma forma de editar ou excluir um evento.
+- [ ] Não há na aplicação nenhuma forma de editar ou excluir um evento, além da troca única do resultado pendente para sucesso ou falha.
 
 ### F13. Cotas diárias, budgets e rate limits
 - [ ] Com uma cota de 1.000 tokens/dia em `ticket-classifier`, a chave é bloqueada com 429 `quota_exceeded` assim que o saldo não cobre a reserva (entrada estimada + 256), e o total do dia nunca passa de 1.000.
@@ -1053,7 +1178,7 @@ graph TD
 - [ ] Um erro de cota mostra a mensagem traduzida e mantém o texto digitado no formulário.
 - [ ] O classificador mostra "Cobrança" e o motivo para a mensagem padrão da demo D7 quando a resposta é válida.
 - [ ] Com o destino simulado devolvendo JSON entre crases, o classificador mostra *"A resposta veio fora do formato esperado."* e a resposta crua.
-- [ ] Um usuário sem permissão para `ticket-classifier` não vê a tela do classificador no menu, e o acesso pela URL retorna 403.
+- [ ] Um usuário sem permissão para `ticket-classifier` não vê a tela do classificador no menu, e, ao abrir a tela pela URL, a API devolve 403 e a tela mostra *"Você não tem permissão para acessar esta página."*
 
 ### F16. Consumo e exportação
 - [ ] Um `user` vê só o próprio consumo, um `domain_admin` vê todo o domínio, e um `platform_admin` vê todos os domínios.
@@ -1085,11 +1210,11 @@ graph TD
 - [ ] F02 → F05: um domínio só consegue habilitar capacidades cujos nomes existem no catálogo, e uma capacidade removida do catálogo some das capacidades efetivas do domínio.
 - [ ] F05 → F06: a permissão efetiva de uma chave muda na hora quando o domínio desabilita uma capacidade.
 - [ ] F02 → F07: a tabela do catálogo mostra exatamente as capacidades, os deployments, os preços e os estados definidos no catálogo e no estado em tempo real.
-- [ ] F05 → F07: um domínio criado ou editado pela tela aparece na API administrativa com os mesmos limites e a mesma cota padrão.
+- [ ] F05 → F07: um domínio criado ou editado pela tela aparece na API administrativa com os mesmos limites e a mesma cota padrão, e um domínio removido ou restaurado pela tela aparece na API com o mesmo status.
 - [ ] F06 → F07: o primeiro administrador criado com o domínio recebe uma chave de usuário válida, que funciona no `/v1` com as capacidades do domínio.
 - [ ] F02 → F08: o `max_tokens` máximo, os parâmetros aceitos e o mapeamento de cada deployment do catálogo são aplicados pelo endpoint.
 - [ ] F06 → F08: o endpoint atende ou recusa conforme a permissão efetiva e o status do domínio resolvidos a partir da chave.
-- [ ] F05 → F09: o formulário de usuário usa as capacidades habilitadas e a cota padrão do domínio.
+- [ ] F05 → F09: o formulário de usuário usa as capacidades habilitadas e a cota padrão do domínio, e o seletor do `platform_admin` não mostra domínios removidos.
 - [ ] F06 → F09: as permissões, as cotas e os limites salvos na tela de usuários são exatamente os que a API de chaves devolve.
 - [ ] F02 → F10: o custo registrado usa o preço do deployment que respondeu, definido no catálogo.
 - [ ] F08 → F10: cada chamada ao endpoint gera um registro com o mesmo request ID devolvido ao cliente.
@@ -1109,4 +1234,4 @@ graph TD
 - [ ] F08 → F17: cada tentativa feita pelo roteamento aparece como um item do registro de uso da chamada.
 - [ ] F13 → F17: quando a F13 informa o teto do fallback atingido, o roteamento não chama o fallback.
 - [ ] F09 → F18: a tela Limites mostra o nome do usuário ou da chave de aplicação de cada linha.
-- [ ] F13 → F18: o saldo e os alertas mostrados batem com a situação de cota e budget informada pela F13.
+- [ ] F13 → F18: o saldo e os alertas mostrados batem com a situação de cota e budget informada pela F13, e a tela Limites não mostra domínios removidos.

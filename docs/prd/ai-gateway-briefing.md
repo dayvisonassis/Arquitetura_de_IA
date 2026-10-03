@@ -1,5 +1,9 @@
 # AI Gateway — briefing para o PRD
 
+> **Superado em 2026-10-03.** A stack descrita aqui (Express com EJS, sessão em cookie com CSRF, argon2id, npm
+> workspaces, portas 3000 e 4000) foi trocada na revisão do [PRD](ai-gateway-prd.md): frontend Angular, backend
+> Express em JavaScript, proxy em TypeScript, JWT e bcrypt, em apps independentes. Quando os dois divergirem, vale o PRD.
+
 Material de entrada para a skill `prd-writer`. Ele junta duas fontes:
 
 - a aula de AI Gateway do MBA em Arquitetura de IA (transcrição em [docs/transcription/ia_gateway](../transcription/ia_gateway)), já que o professor não disponibilizou o repositório;
