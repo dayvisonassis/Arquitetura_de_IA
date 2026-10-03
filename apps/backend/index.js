@@ -1,9 +1,16 @@
+import './loader'
 import { createServer } from 'http'
+import { assertConfig, config } from './src/config/env'
+import logger from './src/logger'
 import app from './src/app'
 
-const port = Number(process.env.PORT) || 3030
-const host = process.env.API_HOST || '127.0.0.1'
+try {
+  assertConfig()
+} catch (error) {
+  process.stderr.write(`${error.message}\n`)
+  process.exit(1)
+}
 
-createServer(app).listen(port, host, () => {
-  process.stdout.write(`backend listening on http://${host}:${port}\n`)
+createServer(app).listen(config.port, config.apiHost, () => {
+  logger.info(`backend listening on http://${config.apiHost}:${config.port}`)
 })

@@ -1,5 +1,6 @@
 module.exports = {
   testEnvironment: 'node',
+  testTimeout: 30000,
   setupFiles: ['<rootDir>/__tests__/setupTests.js'],
   testPathIgnorePatterns: [
     '/node_modules/',

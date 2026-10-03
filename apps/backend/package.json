@@ -4,10 +4,17 @@
   "private": true,
   "main": "index.js",
   "scripts": {
-    "dev": "cross-env NODE_ENV=development nodemon --exec babel-node ./index.js",
-    "build": "babel index.js -d dist && babel src -d dist/src",
+    "dev": "cross-env NODE_ENV=development nodemon --legacy-watch --exec babel-node ./index.js",
+    "build": "babel index.js loader.js database.js knexfile.js redis-client.js -d dist && babel src -d dist/src",
     "prod": "cross-env NODE_ENV=production node dist/index.js",
     "test:unit": "cross-env NODE_ENV=testing jest __tests__/unit/",
+    "test:integration": "npm run migrations:test && cross-env NODE_ENV=testing jest __tests__/integration/ --runInBand",
+    "migrations:dev": "cross-env NODE_ENV=development knex migrate:latest",
+    "migrations:test": "cross-env NODE_ENV=testing knex migrate:latest",
+    "migrations:prod": "cross-env NODE_ENV=production knex migrate:latest",
+    "migration:add": "cross-env NODE_ENV=development knex migrate:make",
+    "seed:dev": "cross-env NODE_ENV=development knex seed:run",
+    "seed:run": "knex seed:run",
     "lint": "eslint . --ext .js",
     "lint:fix": "eslint . --ext .js --fix",
     "lint:check": "eslint . --ext .js --max-warnings 0",
@@ -16,7 +23,12 @@
     "check": "npm run lint:check && npm run format:check"
   },
   "dependencies": {
-    "express": "^4.22.3"
+    "dotenv": "^16.6.1",
+    "express": "^4.22.3",
+    "knex": "^3.3.0",
+    "mysql2": "^3.24.5",
+    "pino": "^9.14.0",
+    "redis": "^4.7.1"
   },
   "devDependencies": {
     "@babel/cli": "^7.29.7",

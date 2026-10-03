@@ -17,7 +17,9 @@
     "test:coverage": "jest --coverage"
   },
   "dependencies": {
-    "express": "^4.22.3"
+    "dotenv": "^16.6.1",
+    "express": "^4.22.3",
+    "pino": "^9.14.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.25",
