@@ -1,185 +1,421 @@
 # Quality Gates
 
-Checagens determinísticas de passa/falha que protegem o projeto. Os `id`s abaixo são os mesmos que o
-`spec-writer` declara no `contract.md` de cada feature e que o `implement-feature` e o `evaluator` executam.
+Checagens determinísticas de passa/falha. Os `id`s abaixo são os mesmos que o `spec-writer` declara no
+`contract.md` de cada feature, e que o `implement-feature` e o `evaluator` executam com `npm run gate:<id>`.
+
+Os gates só leem o código: nenhum deles altera código de aplicação.
 
 ## Como rodar
 
 ```bash
-npm run gate                        # todos, em ordem, parando na primeira falha
-npm run gate:lint                   # um gate isolado
-node scripts/runGate.mjs lint arch  # um subconjunto (sempre na ordem do registro)
+npm run gate                               # a cadeia padrão: tudo menos os gates optIn
+npm run gate:lint-backend                  # um gate isolado (optIn incluídos)
+node scripts/runGate.mjs tests-backend apps/backend/src/app.js
+                                           # um gate com caminhos explícitos no lugar do diff
+node scripts/runGate.mjs apps/ia           # a cadeia padrão sobre uma pasta inteira
+GATE_BASE=HEAD npm run gate                # só o que ainda não foi commitado
 ```
 
-Código de saída: `0` = tudo passou · `1` = algum gate falhou · `2` = id de gate desconhecido.
+O runner é [scripts/runGate.mjs](scripts/runGate.mjs). Ele roda os gates do mais barato ao mais caro, **para no
+primeiro FAIL** e sai com código 1. No fim, imprime um resumo: `PASS`, `PASS (nothing to check)`, `SKIPPED`, `FAIL`
+ou `NOT RUN`.
 
-O gate `e2e` precisa do app no ar (ver [O gate `e2e`](#o-gate-e2e)). Com `npm run dev` rodando em outro terminal,
-`npm run gate` roda os sete gates.
+## Escopo: arquivos alterados
 
-## Workspaces
+Os gates checam **o que a sua mudança alterou**.
 
-O repositório é um monorepo com npm workspaces, na estrutura definida pela F01 do PRD:
+- **Alterado** = diff contra o merge-base com a base, mais staged, unstaged e não rastreados. Arquivo novo é checado
+  antes do commit.
+- **Base:** `GATE_BASE`, se definido. Senão, o merge-base mais próximo do HEAD entre `origin/main` e `main`, ignorando
+  o branch em que você está (no `main`, a base é o `origin/main`). Sem nenhum dos dois, só o que não foi commitado.
+- **Caminhos explícitos** substituem o diff. Uma pasta vira todos os arquivos dela, rastreados ou não.
+- **Um app sem arquivo alterado** deixa os gates dele em `PASS (nothing to check)`.
+- **Mudou a configuração de um app** (`package.json`, `package-lock.json`, `.npmrc`, `.eslintrc.json`, `.stylelintrc.json`,
+  `jest.config.js`, `babel.config.js`, `knip.json`, `angular.json` ou um tsconfig): lint e testes desse app passam a
+  considerar o app inteiro.
+- Os binários rodam com `node <bin>` e argumentos explícitos, sem shell: no Windows o `cmd.exe` não expande globs e
+  corta linhas longas.
 
-| Workspace | Pacote | Estado |
-|---|---|---|
-| `packages/contract` | `@arquitetura-de-ia/contract` | vazio, implementado a partir da F01 |
-| `services/ai-gateway` | `@arquitetura-de-ia/ai-gateway` | vazio, implementado a partir da F01 |
-| `apps/web` | `@arquitetura-de-ia/web` | esqueleto MVC (Express + EJS) |
-
-- Os gates por workspace (`typecheck`, `build`, `tests` e as regras do `check-architecture`) rodam em todo
-  workspace que tem `src/`. Um workspace sem `src/` aparece na saída como `sem src/ ainda, nada a checar`.
-- Cada workspace já tem `tsconfig.json`, `tsconfig.build.json`, `jest.config.js` e as dependências de teste
-  (`jest`, `ts-jest`, `@types/jest`). Uma feature só precisa criar `src/` e `tests/`; os gates passam a valer sozinhos.
-- A ordem no `package.json` raiz é `packages → services → apps`, para que `npm run build --workspaces`
-  compile o contrato antes de quem o usa.
-- A lista de workspaces é lida por [scripts/workspaces.mjs](scripts/workspaces.mjs), que só entende padrões no formato `pasta/*`.
+> **Durante um merge em andamento**, tudo o que o merge colocou em staged conta como alterado. Termine o merge ou
+> passe caminhos explícitos antes de ler o resultado como um veredito sobre o seu trabalho.
 
 ## Gates
 
-A ordem vai do mais barato ao mais caro, e os que precisam do app no ar vêm por último:
-`typecheck → lint → build → arch → tests → deadcode → e2e`.
-
-| id | O que garante | Comando | Configuração |
-|---|---|---|---|
-| `typecheck` | Contrato de tipos (strict) | `tsc -p tsconfig.json --noEmit` (raiz) + `tsc -p <ws>/tsconfig.json --noEmit` por workspace | `tsconfig.base.json` (opções comuns), `tsconfig.json` (só a config do runner e `tests/e2e`), `<ws>/tsconfig.json` |
-| `lint` | Consistência, **zero warnings** | `eslint . --max-warnings=0` | `eslint.config.mjs` (typescript-eslint `recommendedTypeChecked`) |
-| `build` | Cada workspace compila para `<ws>/dist/` | `tsc -p <ws>/tsconfig.build.json` | `<ws>/tsconfig.build.json` |
-| `arch` | Fronteiras entre workspaces e camadas MVC | `depcruise <ws>/src <ws>/tests` + `node scripts/check-architecture.mjs` | `.dependency-cruiser.cjs`, `scripts/check-architecture.mjs` |
-| `tests` | Comportamento + cobertura mínima de 80% **por workspace** | `jest --coverage -c <ws>/jest.config.js` | `<ws>/jest.config.js` (`coverageThreshold`, provider `v8`) |
-| `deadcode` | Arquivos, exports e dependências sem uso | `knip` | `knip.json` (por workspace) |
-| `e2e` | Fluxos de usuário num navegador, contra o app no ar | `playwright test --config playwright.e2e.config.ts` | `playwright.e2e.config.ts`, `tests/e2e/` |
-
-### Regras do `arch`
-
-| Regra | Onde é aplicada | Significado |
+| id | Comando | Escopo |
 |---|---|---|
-| `no-circular` | dependency-cruiser | nenhum ciclo de import |
-| `web-not-to-gateway` | dependency-cruiser | `apps/` não importa `services/`; o sistema web fala com o proxy só pela API HTTP |
-| `gateway-not-to-web` | dependency-cruiser | `services/` não importa `apps/` |
-| `packages-are-leaves` | dependency-cruiser | `packages/` não importa `apps/` nem `services/` |
-| `models-are-pure` | dependency-cruiser | `apps/web/src/models/` não importa controllers, routes, middlewares, `app`/`server` nem `express` |
-| `controllers-not-routes` | dependency-cruiser | `apps/web/src/controllers/` não importa `routes/` nem `app`/`server` |
-| `routes-only-wire` | dependency-cruiser | `apps/web/src/routes/` não importa `models/`; a rota só liga URL → controller |
-| `not-to-tests` | dependency-cruiser | o `src/` de nenhum workspace importa `tests/`, dele ou da raiz |
-| `no-orphans` | dependency-cruiser | todo módulo de `src/` precisa ser alcançável a partir de `src/server.ts` (apps e serviços) ou `src/index.ts` (pacotes) |
-| `env-only-in-config` | check-architecture | `process.env` só em `<ws>/src/config/env.ts`; em `packages/*`, em lugar nenhum |
-| `listen-only-in-server` | check-architecture | `.listen(` só em `<ws>/src/server.ts`, para que o `app.ts` continue testável; em `packages/*`, em lugar nenhum |
+| `typecheck-frontend` | `tsc --noEmit -p apps/frontend/tsconfig.gate.json` (código e specs) | frontend alterado |
+| `typecheck-monorepo` | `tsc --noEmit -p tsconfig.eslint.json` (código e testes) | `ia`, `ia_simulator` alterados |
+| `lint-backend` | `eslint --max-warnings 0 <.js alterados>` | backend |
+| `raw-sql-backend` | regra `no-knex-raw` pela API do ESLint, depois do autoteste | `.js` alterados de `apps/backend/src` |
+| `query-loop-backend` | regra `no-query-in-loop` pela API do ESLint, depois do autoteste | idem |
+| `lint-frontend` | `eslint --max-warnings 0 <.ts/.html alterados>` | `apps/frontend/src` |
+| `lint-monorepo` | `eslint --max-warnings 0 <.ts/.js alterados>` | `ia`, `ia_simulator` |
+| `styles-frontend` | stylelint nos `.css` + regras de template nos `.html` + proibição de `.component.scss`, depois do autoteste | `apps/frontend/src` |
+| `build-backend` | `npm run build` (Babel para `dist/`) | backend alterado |
+| `build-monorepo` | `tsc -p tsconfig.json` (para `dist/`) | `ia`, `ia_simulator` alterados |
+| `build-frontend` | `ng build` (produção, AOT) | **optIn**: o frontend inteiro, só por `npm run gate:build-frontend` |
+| `arch` | dependency-cruiser + [scripts/check-architecture.mjs](scripts/check-architecture.mjs) | apps alterados |
+| `tests-backend` | `jest --findRelatedTests <alterados> --coverage` | backend |
+| `tests-frontend` | idem | frontend |
+| `tests-monorepo` | idem, por app | `ia`, `ia_simulator` |
+| `deadcode` | `knip --directory apps/<app>` | apps alterados |
+| `e2e-frontend` | `playwright test --config playwright.e2e.config.js` | **optIn**, ainda não provado verde (ver abaixo) |
 
-As três regras de fronteira olham o caminho **resolvido** do import. Como o npm liga cada workspace em
-`node_modules/@arquitetura-de-ia/*` e o dependency-cruiser segue o link até a pasta real, elas pegam tanto
-`../../../services/...` quanto `@arquitetura-de-ia/ai-gateway`.
+Ordem da cadeia padrão: `typecheck-frontend → typecheck-monorepo → lint-backend → raw-sql-backend →
+query-loop-backend → lint-frontend → lint-monorepo → styles-frontend → build-backend → build-monorepo → arch →
+tests-backend → tests-frontend → tests-monorepo → deadcode`.
 
-### O gate `e2e`
+"Monorepo" aqui são os apps em TypeScript que não são o frontend: `ia` e `ia_simulator`. Um app novo entra em
+`MONOREPO_APPS` (ou na constante equivalente) em [scripts/gates/scope.mjs](scripts/gates/scope.mjs).
 
-- **Precisa do app no ar.** O gate não sobe o app. Antes de rodar, ele confere se `E2E_BASE_URL`
-  (padrão `http://127.0.0.1:3000`) responde. Se não responder, falha com as instruções para subir:
-  `npm run dev` hoje, `docker compose up` depois da F01.
-- **Roda headless.** Não abre janela nenhuma. Isso é diferente da execução com navegador visível que um humano
-  acompanha num smoke test (`playwright-cli open --headed`, usada pelo `qa-preflight`).
-- **Escopo:** roda quando muda algo num workspace, em `tests/e2e/`, em `playwright.e2e.config.ts` ou no
-  `package-lock.json`, comparando com `origin/main` (ou `HEAD`, sem remoto) mais os arquivos não rastreados.
-  Sem mudança nesses caminhos, é um no-op que passa e avisa.
-  - `E2E_FORCE=1` roda mesmo sem mudança.
-  - `E2E_SKIP=1` pula o gate com um banner de "não verificado". É a válvula de escape do gate, para uso
-    consciente, e não tem relação com proteção anti-bot do app.
-- **Sem retry e com 1 worker.** Um gate não pode passar na segunda tentativa. Os testes rodam em série porque
-  vão escrever no mesmo banco.
-- **Sessões:** um projeto do runner por sessão; a pasta do teste decide com que sessão ele roda. Sem login até a
-  F04, só existe o projeto `public` (`tests/e2e/public/`).
-- **Semente:** [tests/e2e/public/seed.spec.ts](tests/e2e/public/seed.spec.ts) abre `/` e confere o layout. Ela prova o
-  harness, não o produto.
-- **Quando falha:** screenshot e trace ficam em `test-results/e2e/` (ignorado pelo Git).
-  `npx playwright show-trace <trace.zip>` abre o trace.
-- **Subconjunto:** `npm run test:e2e -- --grep "@F07(?![\w-])"` roda só os testes da F07. A âncora evita que `@F07`
-  pegue `@F07-v2`.
-- **Onde ler o último build do servidor:** hoje, no terminal do `npm run dev` (o `tsx` recompila a cada mudança e
-  mostra o erro ali). Depois da F01, em `docker compose logs web`.
-- **Os testes escrevem pelo produto** no banco que o app estiver usando: hoje o model em memória, a partir da F01 o
-  MySQL. Quem mantém esse banco limpo é a política de dados dos testes, não o gate.
-- **Comprovado verde em 2026-10-03.** A semente foi quebrada de propósito, o gate falhou, a semente foi restaurada e o
-  gate passou. Desde então o `e2e` faz parte da lista padrão do `npm run gate`.
+### Decisões de desenho
 
-#### Decisões provisórias e o que ainda está indefinido
+| Tema | Decisão | Por quê |
+|---|---|---|
+| Baseline | Nenhuma: tudo bloqueia desde o primeiro commit. | Em 2026-10-03 os quatro apps tinham 0 warnings de lint e 0 erros de tipo. |
+| Testes | `jest --findRelatedTests` com cobertura ≥ 80% **só nos fontes alterados**. | O PRD exige 80%. Medir só o código alterado também funciona num repositório com legado de baixa cobertura. |
+| Build | `build-backend` e `build-monorepo` na cadeia padrão; `build-frontend` optIn. | O PRD põe o build de todos os apps no `npm run gate`. O `build-frontend` é optIn por decisão do time. |
+| `arch` e `deadcode` | Por app, marcados como **experimentos**. | Medem se a ferramenta compensa antes de virar regra. |
+| Gate e2e | `e2e-frontend`, no formato que a skill `e2e-test-writer` espera. | É o harness que as skills de teste do SDD procuram. |
 
-- **Provisório:** diretório `tests/e2e/<projeto>/`, um projeto por sessão.
-- **Provisório:** nenhuma conta até a F04.
-- **Indefinido para o time:** os padrões dos testes de feature, a política de dados e quais contas os testes usam.
-- **Quem escreve os testes de feature:** não há `e2e-test-writer` para esta stack (as test-writers instaladas são de
-  outro projeto). O `implement-feature` os escreve pelo fallback genérico: um fluxo por arquivo, cada teste marcado com
-  `@<feature-id>` e os ids das superfícies do contrato, e a tabela de cobertura em `docs/<feature>/e2e-test.md`.
-  Cobertura e2e que faltar vira PENDING no `evaluator`, para um humano.
+## `typecheck-frontend` e `build-frontend`
 
-#### Próximas mudanças no harness (feitas pela `gate-builder`)
+O `tsc --noEmit` **não lê os templates do Angular**. Um binding para uma propriedade que não existe, um pipe com o
+tipo errado ou um input renomeado só aparecem no build AOT. Por isso, **rode `npm run gate:build-frontend` antes de
+abrir um PR que mexeu em template.** O gate chama o `ng build` direto, não o script `build` do app.
 
-| Quando | O que muda |
+O `tsconfig.gate.json` inclui os specs, com os tipos do Jest, porque aqui não há legado com erro de tipo.
+
+## Os gates de acesso a dados: `raw-sql-backend` e `query-loop-backend`
+
+Duas regras bloqueantes para o código do backend: **nada de SQL raw novo** e **nada de consulta dentro de loop** (a
+metade estática do N+1). As regras estão em [apps/backend/tools/eslint-rules/](apps/backend/tools/eslint-rules/) e o
+runner as executa pela API do ESLint:
+
+- **A configuração inline fica desligada**, então um comentário `eslint-disable` não as silencia.
+- **O runner define as regras e a allowlist.** Mexer no `.eslintrc.json` do backend não muda nada nelas.
+- **Antes de dar o veredito, cada execução roda o autoteste** das regras
+  ([scripts/__tests__/data-access-rules.test.mjs](scripts/__tests__/data-access-rules.test.mjs)). Se ele falha, o gate falha.
+- **Mudou algo em `apps/backend/tools/`** (regras ou allowlist): os dois gates checam todo o `src/`.
+
+### `no-knex-raw`
+
+Rejeita `raw`, `whereRaw`, `andWhereRaw`, `orWhereRaw`, `havingRaw`, `andHavingRaw`, `orHavingRaw`, `orderByRaw`,
+`groupByRaw`, `joinRaw` e `fromRaw`, inclusive na forma `x['whereRaw'](…)`.
+
+Não reporta:
+- o `String.raw`;
+- um `.raw()` sem argumento, ou com um objeto literal como primeiro argumento (`express.raw({ … })`), que é middleware.
+
+| Mensagem | Significado | Allowlist? |
+|---|---|---|
+| `interpolated` | o SQL é um template com `${…}` ou uma concatenação com algo que não é literal | **nunca**: é o formato da injeção de SQL. Valores vão como bindings (`?`, e `??` para identificadores) |
+| `dynamic` | o SQL chega numa variável ou expressão (`db.raw(sql)`, `parts.join(' ')`) | **nunca**: ninguém consegue revisar na chamada o que ela executa |
+| `newRaw` | SQL literal | só com uma entrada revisada na allowlist |
+
+**UUIDs:** o domínio (`dr_domain`) usa `BINARY(16)`. A F01 deve criar um helper (`uuidToBin`/`binToUuid`) que converte
+no Node, para que `UUID_TO_BIN(?)` não vire SQL raw em cada model.
+
+### `no-query-in-loop`
+
+Rejeita uma chamada ao banco que roda **uma vez por item**:
+- no corpo de `for`, `for…of`, `for…in`, `while` e `do…while`, e no teste ou no update de `for` e `while`
+  (`while (await db('q').first())`);
+- no callback de `map`, `flatMap`, `forEach`, `filter`, `reduce`, `reduceRight`, `some`, `every`, `find`,
+  `findIndex`, `findLast`, `findLastIndex`, `Array.from(xs, cb)` e dos iteradores do lodash. Isso cobre o N+1 em
+  paralelo, `Promise.all(ids.map(id => …))`;
+- através de um callback inline dentro desses lugares (`withRetry(() => db(…))` num loop).
+
+O que conta como chamada ao banco:
+- **uma cadeia knex** que começa em `db`, `knex`, `trx`, `tx`, `dbRead`, `dbWrite` ou `transaction`, em
+  `this.`/`self.`/`that.` um desses, em `getDb(…)`, ou numa variável inicializada a partir deles
+  (`const reader = runner || this.dbRead`). Os nomes genéricos `database`, `runner`, `reader`, `writer`,
+  `executor`, `connection` e `conn` só contam quando usados como knex: chamados direto (`runner('t')`) ou com um
+  método do knex (`reader.select(…)`);
+- **um builder aguardado:** `await q`, quando `q` guarda um builder (`const q = db('t')`);
+- **uma chamada de model:** objeto com nome terminado em `Model`/`ModelInstance`, `this.xModel`, `model` ou
+  `new XModel()`. Conta sempre que o resultado é usado como promise: `await`, `return`, corpo de arrow,
+  `.then/.catch/.finally`, `push/unshift` ou elemento de array. Nas posições fracas (resultado descartado, argumento
+  de uma chamada aguardada, atrás de `||`/`?:`), só conta se o método parece consulta (`create`, `update`, `delete`,
+  `find`, `get`, `list`, `count`, …).
+
+Um `db.raw(…)` dentro de uma cadeia knex (`.select(db.raw('COUNT(*)'))`) é **fragmento**, não consulta. Numa posição
+de valor (argumento, `push`, elemento de array, valor de propriedade, corpo de arrow), também é fragmento, a menos que
+o SQL comece com um comando (`SELECT`, `INSERT`, `UPDATE`, `DELETE`, DDL…).
+
+Não reporta:
+- `q = q.where(…)`, que compõe uma única consulta ao longo do loop;
+- o que fica sob `.fn` (`trx.fn.now()`);
+- `const rows = await db(…)` antes do loop;
+- uma lista fixa de consultas diferentes em paralelo (`Promise.all([count, page])`).
+
+**O padrão aceito:** carregar os itens numa consulta só e cruzar em memória (`whereIn` + `Map`). **Esconder o padrão da
+regra não é correção:** renomear o handle, embrulhar a consulta num helper ou tirá-la de `src/` mantém o N+1. Uma
+exceção honesta passa pela allowlist.
+
+### A allowlist: [apps/backend/tools/data-access-allowlist.json](apps/backend/tools/data-access-allowlist.json)
+
+O projeto proíbe comentários em código de produção, então a justificativa de uma exceção fica neste arquivo, que
+aparece no diff de todo PR.
+
+```json
+{
+  "rawSql": [
+    {
+      "file": "src/api/v2/models/usage.model.js",
+      "sql": "JSON_EXTRACT(payload, '$.status') = ?",
+      "reason": "JSON_EXTRACT has no knex builder equivalent",
+      "feature": "F10",
+      "approved": "<nome do revisor> <data>"
+    }
+  ],
+  "queryInLoop": [
+    {
+      "file": "src/services/sequence.service.js",
+      "function": "nextValue",
+      "query": "trx('seq').select('last').where('id',id).forUpdate()",
+      "reason": "retry loop on a sequence collision, not one query per item",
+      "feature": "F07"
+    }
+  ]
+}
+```
+
+- `file` é relativo a `apps/backend`. `sql` é o SQL literal; os espaços são colapsados antes de comparar.
+- Uma entrada de `queryInLoop` vale para **`function` e `query`**. `query` é o código que o gate imprime depois de
+  `code:` na mensagem. Uma segunda consulta na mesma função continua sendo reportada.
+- **`reason` precisa de pelo menos 10 caracteres**, e `function` precisa nomear uma função (`<anonymous>` é recusado).
+  Uma entrada inválida é **ignorada** (a chamada continua reportada), e o gate a lista.
+- **`feature`** é o id da feature que acrescentou a entrada.
+- **`approved` é preenchido só por um revisor humano**, com nome e data. Nenhum agente escreve esse campo.
+- A entrada vale assim que entra no arquivo. A cada execução, o gate lista as entradas sem `approved` em
+  `NEEDS HUMAN APPROVAL before merge`. Para o `evaluator`, qualquer entrada sem aprovação impede o estado CLEAN.
+  O `fix-runner` nunca acrescenta entradas.
+- O `implement-feature` só acrescenta uma entrada quando o padrão aceito não consegue expressar o código, e só nestas
+  categorias:
+
+| Allowlist | Categorias aceitas (valores sempre como bindings) |
 |---|---|
-| F01 concluída | a instrução para subir o app passa a ser `docker compose up`, e o build do servidor passa a ser lido em `docker compose logs web`. O escopo já cobre os três workspaces. |
-| F04 concluída | um global setup entra uma vez por papel (`platform_admin`, `domain_admin`, `user`) e guarda a sessão em `tests/e2e/.auth/<papel>.json`, reaproveitada enquanto for válida (8 h). Um projeto do runner e uma semente por papel, as contas `domain_admin` e `user` no mesmo domínio, e uma fixture de API por sessão para criar e remover dados. Nunca repetir login em loop: 5 erros seguidos bloqueiam a conta por 15 minutos. |
+| `rawSql` | SQL sem forma no builder: `CASE WHEN`, `COALESCE`/`IFNULL`/`IF()`, funções de data e de JSON, funções de texto, window functions, `ON DUPLICATE KEY UPDATE` |
+| `queryInLoop` | loop de retry; processamento sequencial deliberado (lock por linha, fila ordenada); job que processa um item por iteração por desenho |
 
-### Exceções conscientes
+Limite conhecido: uma entrada que não casa com nenhum achado (velha ou escrita errada) não é aplicada nem reportada.
 
-- `knip.json` → `ignoreDependencies: ["ejs"]` em `apps/web`: o EJS é carregado pelo Express via
-  `app.set('view engine', 'ejs')`, não por `import`, então o knip não o enxerga.
-- `knip.json` → `ignoreExportsUsedInFile: true`: um tipo exportado e usado no próprio arquivo não conta como código morto.
-- `<ws>/jest.config.js` → `coverageProvider: 'v8'`: o provider padrão (babel/istanbul) gera caminhos `file:/C:/...` no
-  Windows e quebra o relatório lcov.
-- `services/ai-gateway` e `packages/contract` declaram `jest`, `ts-jest` e `@types/jest` antes de ter código: a
-  configuração de teste deles já usa essas ferramentas, e assim a F01 não precisa mexer na infraestrutura dos gates.
+## `styles-frontend`: o design system
 
-## Adicionar um gate
+Aplica o subconjunto determinístico do design system. A fonte das regras é
+`.claude/skills/pabx-design-system/references/angular-material.md`, versionado neste repositório. A F04 copia o
+documento para `docs/design-system/angular-material.md`, junto com o tema. Regras subjetivas (densidade, hierarquia,
+estética) **não entram no gate**: ficam para a verificação visual num navegador.
 
-1. Acrescente `{ id, label, run }` ao array `GATES` em [scripts/runGate.mjs](scripts/runGate.mjs), na posição certa da
-   ordem barato → caro. Para rodar por workspace, use o helper `eachWorkspace`.
-2. Crie o script `gate:<id>` no `package.json` raiz.
-3. Documente o gate nesta página, inclusive o que ele **não** cobre.
+- **CSS**, pelo stylelint ([apps/frontend/.stylelintrc.json](apps/frontend/.stylelintrc.json) e o plugin local
+  [apps/frontend/tools/stylelint-rules/](apps/frontend/tools/stylelint-rules/)), tudo como erro:
+  - `tails/no-important-on-tokens`: token (`--*`) nunca leva `!important`;
+  - `tails/no-hardcoded-hex`: cor só por token. O fallback `var(--token, #hex)` é aceito, e `src/themes/**`, onde
+    os tokens são definidos, é exceção;
+  - `color-no-invalid-hex` e `property-no-unknown`.
+- **Templates HTML**, por regras locais do ESLint
+  ([apps/frontend/tools/eslint-rules/](apps/frontend/tools/eslint-rules/)), todas bloqueantes:
+  - `no-color-attr-on-buttons`: botão Material não recebe `color`. A exceção é `color="primary"` dentro de
+    `mat-dialog-actions`;
+  - `no-mat-paginator`: tabela paginada usa `tails-pagination`;
+  - `require-aria-label-icon-button`: todo `mat-icon-button` tem `aria-label` ou `[attr.aria-label]`.
+- **Nome de arquivo:** `.component.scss` é recusado; o estilo de componente é `.component.css`.
+- Antes do veredito, roda o autoteste das regras
+  ([scripts/__tests__/design-system-rules.test.mjs](scripts/__tests__/design-system-rules.test.mjs)). Mudou algo em
+  `apps/frontend/tools/` ou na configuração: o gate checa todo o `src/`.
 
-## Adicionar um workspace
+Só os `.css` passam pelo stylelint. O `styles.scss` global e os temas em `.scss` ficam fora.
 
-1. Crie `<grupo>/<nome>/package.json` dentro de um dos grupos do `package.json` raiz (`packages`, `services`, `apps`).
-2. Copie `tsconfig.json`, `tsconfig.build.json` e `jest.config.js` de um workspace existente, e declare as dependências de teste.
-3. Os gates passam a checá-lo assim que ele tiver `src/`. Um grupo novo exige regras de fronteira novas no `arch`.
+## `arch`
+
+| Regra | Ferramenta | Significado |
+|---|---|---|
+| `no-cross-app` | dependency-cruiser | um app só importa os próprios arquivos, os próprios `node_modules` e `contracts/` (PRD F01) |
+| `not-to-unresolvable` | dependency-cruiser | todo import resolve para um arquivo ou pacote instalado |
+| `no-circular` | dependency-cruiser | nenhum ciclo de import |
+| `src-not-to-tests` | dependency-cruiser | `src/` não importa `__tests__/`, `tests/` nem arquivos `.spec`/`.test` |
+| `backend-models-are-pure` | dependency-cruiser | models (`src/models` ou `src/api/v2/models`) não importam controllers, routes nem `express` |
+| `backend-controllers-not-routes` | dependency-cruiser | controllers não importam routes |
+| `backend-routes-only-wire` | dependency-cruiser | uma rota liga URL → permissão → controller e não chega a models ou services |
+| `services-not-http-layer` | dependency-cruiser | services, em qualquer app, não importam controllers nem routes |
+| `ia-controllers-not-routes` | dependency-cruiser | no `ia` e no `ia_simulator`, controllers não importam routes |
+| `env-only-in-config` | check-architecture | nos apps de servidor, `process.env` só em `index.*`, `loader.*` e `src/config/**`; no frontend, nunca |
+| `listen-only-in-index` | check-architecture | nos apps de servidor, `.listen(` só no `index.*`, para o `app` continuar testável sem abrir porta |
+
+A configuração é [.dependency-cruiser.cjs](.dependency-cruiser.cjs), rodada por app, com o tsconfig do app (caminho
+absoluto, senão o `extends` não resolve).
+
+Em 2026-10-03, as regras de camada valiam para pastas que ainda não existem (a F01 as cria). Cada uma foi provada com um
+arquivo de violação deliberada (ver Histórico).
+
+## Testes e cobertura
+
+Para cada app alterado:
+
+1. Se mudou a configuração de teste, roda a suíte inteira com cobertura, e o limite vale para o app todo.
+2. Senão, roda os testes relacionados aos arquivos alterados (`--findRelatedTests`). Um `.component.html`/`.css`
+   alterado conta como o `.component.ts` ao lado.
+3. A cobertura é medida **só nos fontes alterados que entram no `collectCoverageFrom`** do app. O limite de 80% em
+   linhas, statements, funções e branches está no `coverageThreshold` do `jest.config.js` de cada app, então o
+   `npm run test:coverage` de cada app também o cobra.
+4. **Um fonte alterado sem nenhum teste relacionado faz o gate falhar** (`changed source with no related test`).
+   Arquivos fora do `collectCoverageFrom` (`index.*`, `main.ts`, rotas) não precisam de teste.
+
+As convenções dos testes estão nas skills do fluxo SDD. Este repositório segue o layout que elas esperam:
+`unit-test-writer` (frontend e `apps/backend/__tests__/unit`), `integration-test-writer`
+(`apps/backend/__tests__/integration`, a partir da F01), `monorepo-unit-test-writer` (`ia`, `ia_simulator`) e
+`e2e-test-writer` (`tests/e2e`). O `implement-feature` as aciona por feature.
+
+## `e2e-frontend`
+
+O harness é do gate. Os testes de feature são da `e2e-test-writer`, que nunca edita o harness.
+
+| Peça | Onde |
+|---|---|
+| Config do runner | [playwright.e2e.config.js](playwright.e2e.config.js) (CommonJS), `testDir: './tests/e2e'`, 1 worker, sem retry, headless, screenshot e trace em falha (`test-results/e2e/`) |
+| Perfis | um projeto por sessão: `tests/e2e/admin/**` roda como `domain_admin`, `tests/e2e/agent/**` como `user`. As duas contas ficam **no mesmo domínio** |
+| Sessão | [tests/e2e/global-setup.js](tests/e2e/global-setup.js) guarda a sessão em `tests/e2e/.auth/<perfil>.json` (ignorado pelo Git) e **a reaproveita entre execuções** enquanto o JWT não expira (margem de 5 min) |
+| Sementes | `tests/e2e/<perfil>/harness-seed.spec.js`, uma por perfil: provam o harness, não o produto |
+| Fixtures | [tests/e2e/fixtures.js](tests/e2e/fixtures.js) exporta `test` e `expect`, com `adminApi` e `agentApi`: request context na **origem do backend** (`E2E_API_URL`, padrão `http://127.0.0.1:3030`) com o Bearer da sessão. Os caminhos começam com `/v2/…` |
+| URL do app | `E2E_BASE_URL`, padrão `http://127.0.0.1:4200` |
+| Log do servidor | o terminal do `npm start` do frontend e do `npm run dev` do backend. A partir da F01, `docker logs` do container |
+| Gate | `npm run gate:e2e-frontend` |
+
+- **Precisa do app no ar.** O gate não sobe o app. Se o frontend ou o backend não responder, falha com as instruções
+  para subir.
+- **Roda headless.** Não abre janela. Isso é diferente da execução com navegador visível que um humano acompanha num
+  smoke test (`playwright-cli open --headed`).
+- **Escopo:** roda quando mudou algo em `apps/frontend/`, `apps/backend/`, `tests/e2e/` ou no
+  `playwright.e2e.config.js`. Senão, é no-op. `E2E_FORCE=1` roda mesmo assim. `E2E_SKIP=1` pula com um banner de "não
+  verificado": é a válvula do gate, sem relação com proteção anti-bot do app.
+- **Os testes escrevem pelo produto** no banco que o app usa. Quem mantém esse banco limpo é a política de dados da
+  `e2e-test-writer`, não o gate.
+- **Nunca logar por teste.** O login tem limite de tentativas (20 por 15 minutos, mais o bloqueio de 5 erros por
+  conta). O harness loga uma vez e reaproveita a sessão.
+
+### Estado: optIn e ainda não provado verde
+
+O login só existe a partir da F04. Até lá, o global setup falha com a mensagem `No valid stored session … The sign-in
+flow arrives with F04`. Por isso o gate é optIn e **não conta como suíte e2e** para as skills do SDD.
+
+A F04 completa o harness (é trabalho de gate, feito pela `gate-builder`):
+1. o login no global setup, pela API, com as contas de `E2E_ADMIN_LOGIN`/`E2E_ADMIN_PASSWORD` e
+   `E2E_AGENT_LOGIN`/`E2E_AGENT_PASSWORD`, gravando o `currentUser` no `localStorage` do storage state;
+2. a configuração anti-bot de não produção, se a F04 tiver uma, documentada aqui;
+3. as sementes conferindo o marcador da tela autenticada, e a do `agent` conferindo pela `adminApi` que as duas
+   contas estão no mesmo domínio;
+4. a prova falha → passa (quebrar uma semente de propósito), o registro da data aqui e a entrada do gate na cadeia
+   padrão.
+
+**Provisório, para o time confirmar:** o mapeamento de perfis (`admin` = `domain_admin`, `agent` = `user`), os nomes
+das variáveis das contas e o diretório `tests/e2e/<perfil>/`. Os fluxos do `platform_admin` ficam nos testes de
+integração; um terceiro perfil exigiria adaptar as regras da `e2e-test-writer`.
+
+## Ainda não construído
+
+| Gate ou peça | Quando | Por quê |
+|---|---|---|
+| `tests-integration-backend` | F01 | precisa do MySQL de teste (`web_test`), das migrations e de `__tests__/utils/test-setup` |
+| `visual-frontend` | F04 | precisa de telas e do tema. Começa pelos defeitos que aparecerem, não por uma lista de desejos |
+| Checagens estruturais do `styles-frontend` (densidade de diálogo, listagem com o filtro lateral) | quando os componentes de página existirem | não há o que medir ainda |
+| Lint, typecheck e deadcode do `examples/` | F11 | a pasta ainda não existe |
+
+## Exceções conscientes
+
+- **`apps/backend/knip.json` e `apps/frontend/knip.json`** declaram `tools/eslint-rules/*.js` como entrada. O runner
+  carrega essas regras por `rulePaths`, e o knip não enxerga isso.
+- **O `.eslintrc.json` do frontend declara o `@angular-eslint/template-parser`** no override de `.html`. O preset já o
+  usa, mas sem a declaração o knip acusa a dependência como não usada.
+- **`coverageProvider: 'v8'`** nos quatro `jest.config.js`: o provider padrão gera caminhos `file:/C:/…` no Windows e
+  quebra o relatório lcov.
+- **`apps/frontend/.npmrc` com `legacy-peer-deps=true`:** o `@angular-devkit/build-angular` 19 declara o jest 29 como
+  peer, e os testes rodam no jest 30.
+- **Ferramentas de gate na raiz:** `dependency-cruiser`, `knip`, `picomatch` e o `typescript` que os dois primeiros
+  usam para ler TS.
+- **`npm audit` (2026-10-03), sem gate:**
+  - **frontend, produção:** alertas altos e moderados no `@angular/{core,common,compiler,router}` ≤ 19.2.25, sem
+    correção na linha 19 (a primeira versão corrigida é a 21.2.25, uma major). Parte vale só para SSR, hidratação e
+    `HttpTransferCache`, que este app não usa. Os que valem para um app só no navegador: bypass de sanitização em
+    binding bidirecional e em host bindings de diretivas (XSS), XSS por atributos de evento com i18n, e DoS por memória
+    no `formatDate`. A versão 19.2 é a que o PRD fixa: a decisão de subir é do time;
+  - **backend, `ia`, `ia_simulator`:** produção limpa (`npm audit --omit=dev`). As dependências de desenvolvimento
+    trazem o `braces` (DoS por padrões de glob muito aninhados) via jest e ts-node-dev.
 
 ## O que estes gates NÃO checam
 
 Gate verde não significa feature verificada. O que está abaixo continua sendo responsabilidade de quem valida:
 
-- **Comportamento interativo, fora do que tem teste e2e.** O gate `e2e` só dirige os fluxos que têm teste, e hoje só
-  existe a semente, que abre `/`. Nenhuma tela é exercitada: o formulário de `/users`, a navegação e a página de
-  detalhe do usuário não têm teste e2e. Cada controle precisa ser exercitado individualmente numa execução com
-  navegador visível. **Resultado vazio nunca valida um filtro ou uma busca**: uma busca por um valor inexistente
-  retorna zero linhas funcionando ou não, então teste com um valor que existe nos dados.
-- **Conformidade visual.** Não existe gate `design-system` (o projeto não tem documento de design system) nem
-  `visual-contract`. Layout, contraste, espaçamento e responsividade não são verificados.
-- **Outros navegadores.** O `e2e` roda só no Chromium.
-- **Qualidade dos testes.** A cobertura de 80% mede linhas executadas, não asserções. Um teste que executa o
-  caminho sem checar o resultado passa no gate.
-- **Workspaces vazios.** `services/ai-gateway` e `packages/contract` ainda não têm `src/`, então nenhum gate os
-  verifica de fato. As regras de fronteira e de ambiente foram provadas com violações deliberadas, mas só valem
-  para código que existe.
-- **Serviços externos.** O model atual é em memória. MySQL, Redis, OpenAI e Gemini não são exercitados pelos gates, e
-  o PRD proíbe que um teste chame um provedor real. As demos D4 a D6 contra os provedores reais são manuais.
-- **Regras de arquitetura por regex.** O `check-architecture` busca texto, linha a linha, e ignora só comentários `//`.
-  Um `process.env` montado dinamicamente (`process['env']`) ou dentro de `/* */` escapa da regra.
-- **Segurança e dependências vulneráveis.** Não há gate de `npm audit`, headers, CSRF ou validação de entrada.
+- **Comportamento interativo.** O `e2e-frontend` ainda não roda (login na F04) e, quando rodar, só vai dirigir os
+  fluxos que tiverem teste. Nenhum gate aciona um filtro, um select, um toggle ou a paginação. Cada controle precisa
+  ser exercitado individualmente numa execução com navegador visível, e **um resultado vazio nunca valida um filtro**:
+  filtrar por um valor que não existe retorna zero linhas, funcionando ou não. Use um valor presente nos dados.
+- **Conformidade visual medida.** Não há `visual-frontend`. Cor, contraste, espaçamento e densidade só são provados
+  lendo valores computados num navegador, nunca pela presença de uma classe: um `!important` global pode anular a
+  regra de um componente. O `styles-frontend` checa só o texto do CSS e dos templates. **Smoke de UI sempre no tema
+  escuro primeiro.**
+- **Templates, na cadeia padrão.** O `typecheck-frontend` não lê os templates. Só o `build-frontend` (optIn) os
+  confere.
+- **O `styles.scss` global e os temas `.scss`.** O stylelint só lê `.css`.
+- **Regras burladas por indireção.** O `no-query-in-loop` não segue helpers (`loadOne(id)` num loop, com a consulta
+  em outra função ou módulo), e o `no-knex-raw` não sabe o que um helper monta. O `check-architecture` busca texto, linha
+  a linha: um `process.env` montado dinamicamente escapa.
+- **Qualidade dos testes.** A cobertura mede linhas executadas, não asserções.
+- **Integração com banco e Redis.** Até a F01 não há `tests-integration-backend`. N+1 em tempo de execução (crescimento
+  do número de consultas) também não é medido.
+- **Serviços externos.** O PRD proíbe que um teste chame a OpenAI ou o Google. As demos contra os provedores reais são
+  manuais.
+- **A infraestrutura dos próprios gates.** `scripts/`, `tests/e2e/` e as regras em `apps/frontend/tools/` não passam
+  por lint. As regras de acesso a dados e de design system têm autotestes; o runner não.
+- **Segurança e dependências vulneráveis.** Não há gate de `npm audit`, headers ou validação de entrada.
+- **Outros navegadores.** O e2e roda só no Chromium.
+
+## Adicionar um gate
+
+1. Acrescente `{ id, label, run }` (e `optIn: true`, se for o caso) ao array `GATES` em
+   [scripts/runGate.mjs](scripts/runGate.mjs), na posição certa da ordem barato → caro. `run` recebe o escopo e
+   devolve `true`, `false`, `'noop'` ou `'skipped'`. Para rodar por app, use `forApps` de
+   [scripts/gates/code.mjs](scripts/gates/code.mjs).
+2. Crie o script `gate:<id>` no `package.json` raiz.
+3. Documente o gate aqui, inclusive o que ele **não** cobre, e prove falha → passa com uma violação deliberada.
+
+## Adicionar um app
+
+1. Crie `apps/<app>/` com `package.json`, lockfile, `.eslintrc.json`, `.prettierrc`, `jest.config.js` (com
+   `coverageThreshold` e `coverageProvider: 'v8'`) e tsconfig.
+2. Registre o app em [scripts/gates/scope.mjs](scripts/gates/scope.mjs) (`MONOREPO_APPS` para um app TS de servidor),
+   no `lint-staged` do `package.json` raiz e nos scripts `lint:<app>`/`test:<app>`.
+3. Se for de servidor, acrescente-o a `SERVER_APPS` no [scripts/check-architecture.mjs](scripts/check-architecture.mjs)
+   e ao `ARCH_TS_CONFIG` em [scripts/gates/code.mjs](scripts/gates/code.mjs).
 
 ## Histórico
 
-### 2026-10-03: monorepo e gate `e2e`
+### 2026-10-03: apps independentes
 
-- O app foi movido para `apps/web`, e `services/ai-gateway` e `packages/contract` foram criados vazios, como passo de
-  setup antes da F01. Os gates passaram a rodar por workspace, e o `arch` ganhou as regras de fronteira entre eles.
-- O gate `e2e` foi criado com `@playwright/test` 1.63 e o Chromium.
-- Os sete gates passam (`npm run gate` verde; 10 testes Jest, 100% de linhas e 90,9% de branches; 1 teste e2e).
-- Provas com violações deliberadas, todas desfeitas depois:
-  - `e2e`: semente quebrada → falhou → restaurada → passou. Com o app fora do ar, falha com instruções.
-  - `arch`: `web-not-to-gateway`, `gateway-not-to-web`, `packages-are-leaves` e `env-only-in-config` falharam como
-    esperado, inclusive com o import pelo nome do pacote (`@arquitetura-de-ia/ai-gateway`).
-- Ainda não exercitado: o no-op do `e2e` quando nada que afeta um fluxo mudou. Isso só acontece depois que este
-  trabalho estiver no `origin/main`.
+Os gates foram reconstruídos para o layout de apps independentes. O plano dessa rodada fica no material privado do
+projeto, porque compara os gates com os de outro sistema.
 
-### 2026-09-23: estado inicial
+- **Cadeia padrão verde nos quatro esqueletos:** 15 gates PASS. Os testes ficaram com 100% de cobertura (5 testes no
+  total). Autotestes: 41 casos nas regras de acesso a dados e 17 nas de design system.
+- **`build-frontend`:** verde no esqueleto. Falhou com `{{ missingProperty }}` num template; o template foi restaurado.
+- **22 violações deliberadas, todas barradas pela regra certa e depois apagadas:**
+  - erro de tipo no frontend e no `ia`;
+  - `no-var` e um warning de `prefer-const` no backend (o warning sozinho já falha);
+  - SQL interpolado e um `eslint-disable` que não silenciou o `no-knex-raw`;
+  - consulta num `for…of`;
+  - `no-var` no frontend e um warning de `prefer-const` no `ia_simulator`;
+  - cor hex num `.css`, `<mat-paginator>` e um `.component.scss`;
+  - erro de sintaxe no Babel e erro de tipo no `tsc` do build;
+  - import do backend dentro do `ia`, `process.env` num service, `.listen(` fora do `index` e model importando
+    controller;
+  - fonte sem teste, cobertura de 44% e um spec falhando;
+  - arquivo sem uso para o knip.
+- **`e2e-frontend`:** com o app fora do ar, falha com as instruções. Com `E2E_SKIP=1`, mostra o banner e fica
+  `SKIPPED`. Com frontend e backend no ar, o Playwright carrega os projetos `admin` e `agent` e para no global setup
+  com a mensagem da F04. Ainda não provado verde.
 
-- Todos os gates passam (`npm run gate` verde, 10 testes, 100% de linhas e 90,9% de branches).
-- Na primeira execução, o `lint` apontou 7 erros no esqueleto, que foram corrigidos no código:
-  - `no-unsafe-assignment`: o `req.body` agora é tratado como `unknown` e validado em `parseCreateUser`.
-  - `unbound-method`: os handlers dos controllers passaram a ser arrow functions.
+### Antes de 2026-10-03
+
+Os gates anteriores (`typecheck`, `lint`, `build`, `arch`, `tests`, `deadcode`, `e2e`) foram feitos para o layout de
+npm workspaces e estão no histórico do Git até o commit `9796d54`. Os planos deles ficam em
+`docs/architecture/gate-plan-2026-09-23.md` e `docs/architecture/gate-plan-e2e-2026-10-03.md`.
