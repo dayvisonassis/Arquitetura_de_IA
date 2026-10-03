@@ -72,10 +72,10 @@ Explore the codebase before writing the spec (before the interview in single-fea
 - Authentication strategy and library
 - API or entry-point style (REST, GraphQL, RPC, CLI, job queue, event handler — whatever the project uses) and response/error format
 - Validation approach (typed schemas, runtime validators, manual checks — whatever the codebase prefers)
-- Testing framework and style (unit and integration)
+- Testing framework and style (unit, integration, and end-to-end — where each suite lives and which gate runs it)
 - Error handling (exceptions, Result types, error codes, panic/recover, etc.)
 - Folder structure and naming conventions
-- **(v2) Quality-gate tooling** — the project's lint/typecheck/build/test commands and any architecture checks (dependency-cruiser, custom scripts) — needed to populate the contract's Quality Gates.
+- **(v2) Quality-gate tooling** — the project's lint/typecheck/build/test commands and any architecture checks (dependency-cruiser, custom scripts) — needed to populate the contract's Quality Gates. Read each gate's section in the gate documentation (`GATES.md`) too: a gate that rejects a pattern (raw SQL, a query inside a loop) shapes the design the spec describes — the API Contracts and Data Model should not plan what a declared gate will reject.
 
 **Layer 2 — Broad exploration (also mandatory):** beyond the baseline, capture any additional pattern you observe that could inform implementation — architectural decisions, codebase idioms, recurring abstractions, logging/observability, config management, deploy conventions, internationalization, accessibility, anything. Do not restrict yourself to the baseline list. A thorough report in a medium project typically has 8-15 patterns.
 
@@ -198,7 +198,8 @@ Use the following template to generate spec and plan: `references/feature-templa
 
 **4.3: Generate CONTRACT (v2 — the new artifact)**:
 
-Produce `contract.md` using `references/contract-template.md`. It has four blocks (see
+Produce `contract.md` using `references/contract-template.md`. It has four blocks plus the
+`Test-suite hint` described below (see
 `https://github.com/dayvisonassis/sdd-skills/blob/main/docs/Contrato_de_Feature.md`):
 
 - **Environment Contract** — minimum runtime/services/tools required to execute and test the
@@ -219,11 +220,24 @@ Produce `contract.md` using `references/contract-template.md`. It has four block
 least one Observable Criterion (or a gate, when the AC is purely technical). The gate/criterion
 `id`s are the same `ref` values the `evaluator` will cite in `evaluation-report.json`.
 
-**(Optional) Test-suite hint (PABX monorepo):** when the project has distinct test suites
-(e.g. the PABX monorepo — unit / integration / monorepo-unit), you MAY note, next to the
-`tests` gate or a surface, which suite covers it. This helps the `evaluator` route a test
-failure to the right test-writer, though the evaluator can also derive the suite from the
-failing test's path. Keep it lightweight — do not over-specify.
+**Test-suite hint:** when the project has distinct test suites (e.g. the PABX
+monorepo — unit / integration / monorepo-unit / e2e), fill the contract's `Test-suite hint`
+table: which suite covers each surface. It tells `implement-feature` which test-writer to
+dispatch and helps the `evaluator` route a failure.
+
+- **Without an e2e suite** the table is optional — keep it lightweight.
+- **With an e2e suite (an e2e gate in `GATES.md`, proven green) the table is REQUIRED for every UI surface**,
+  and each UI behavior lands in exactly one row:
+  - a **user flow** (the user acts, something observable follows) → `e2e`;
+  - a **computed value** (contrast, height, density) → the visual gate, when the project has
+    one; otherwise `runtime-only`;
+  - something **no automated suite can reach** (telephony, hardware, a second tenant, an
+    external credential) → `runtime-only`, which the `evaluator` checks by hand.
+
+  A UI behavior missing from the table is an untested flow nobody will notice.
+- **With a query-growth check** (described in `GATES.md`), add one row `integration — query growth`
+  per endpoint in the scope that check defines. The `evaluator` checks that each row has a growth
+  test or an accepted outcome.
 
 **Announce:** "Three documents ready. Proceeding to save..."
 
@@ -237,6 +251,7 @@ SPEC document:
 - [ ] API contracts have JSON examples (if included)
 - [ ] Data model has column types, indexes, constraints (if included)
 - [ ] Testing strategy has specific test functions
+- [ ] When the project's gate documentation (`GATES.md`) describes a query-growth (N+1) check, the Testing Strategy lists a growth test, and the contract's `Test-suite hint` a row `integration — query growth`, for every endpoint in the scope that check defines (the scope lives with the check; do not restate it)
 - [ ] PRD blocks mapped correctly per the PRD → SPEC table
 - [ ] Consumes/Provides from PRD are reflected in Scope or API Contracts
 - [ ] Cross-Feature Integration criteria from PRD Section 9 that reference this feature appear as integration tests
@@ -253,6 +268,7 @@ CONTRACT document (v2):
 - [ ] Each surface has an initial state and concrete observable behaviors
 - [ ] Observable Criteria are evidence-based, each with a stable `id`
 - [ ] Every PRD Section 9 AC for this feature maps to an Observable Criterion or a gate (traceability)
+- [ ] When the project has an e2e suite: every UI behavior appears in the `Test-suite hint` as `e2e`, visual gate, or `runtime-only`, and the e2e gate is declared
 
 **Save all three files to `docs/<feature-id>-<kebab-name>/spec.md`, `plan.md`, and `contract.md`.** Create the folder if it doesn't exist. Verify all three files with the Read tool.
 
@@ -382,6 +398,7 @@ Each sub-agent skips the interactive interview (Step 2) and applies these defaul
 | No codebase patterns found (codebase non-empty but Pattern Discovery returned nothing) | Fall back to industry best practices for the detected stack; document as an explicit assumption |
 | **(v2) Contract environment/criteria not derivable** | Apply a best-practice default for the runtime surface (e.g. dev server + browser automation for a UI page) and document it as an explicit assumption in the contract |
 | **(v2) Quality-gate commands not discoverable** | Use the stack's conventional commands as placeholders, mark them as assumptions in the contract, and flag for user review |
+| **UI behavior whose suite is unclear** (project has an e2e suite) | An action with an observable result → `e2e`; a rendered measurement → visual gate; unreachable by automation → `runtime-only`. Document the choice |
 
 All other spec-writer rules (PRD-driven content, codebase pattern adherence, SPEC/PLAN/CONTRACT validation, kebab-case naming, file structure) apply unchanged.
 
@@ -402,6 +419,7 @@ All other spec-writer rules (PRD-driven content, codebase pattern adherence, SPE
 - Apply the PRD → SPEC mapping consistently across all features
 - Give every contract gate and observable criterion a stable `id` (the `ref` the evaluator will cite)
 - Map every PRD Section 9 AC to a contract Observable Criterion or gate (traceability)
+- When the project has an e2e suite, place every UI behavior in the contract's `Test-suite hint`
 - Preserve the iterative interview style: one question at a time, walk down the decision tree, provide a recommended answer
 
 **Never:**
