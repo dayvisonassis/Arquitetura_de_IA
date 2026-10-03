@@ -58,8 +58,8 @@ Os gates checam **o que a sua mudança alterou**.
 | `tests-backend` | testes de `__tests__/unit` relacionados aos alterados, com cobertura; e o `test:contracts` inteiro, comparado com `contracts/pacts` (ver abaixo) | backend; os contratos também quando muda `contracts/pacts/**` |
 | `tests-frontend` | specs relacionados aos alterados, com cobertura | frontend |
 | `tests-monorepo` | testes de `__tests__/unit` relacionados aos alterados, com cobertura, por app | `ia`, `ia_simulator` |
-| `tests-integration-backend` | `npm run test:integration` (MySQL e Redis de teste) | backend com `__tests__/integration`; **ainda não provado** |
-| `tests-integration-ia` | `npm run test:integration` e `npm run test:contracts` (verificação do provedor) | `ia` com `__tests__/integration`/`__tests__/contracts`, ou mudança em `contracts/**`; **ainda não provado** |
+| `tests-integration-backend` | `npm run test:integration` (MySQL e Redis de teste) | backend com `__tests__/integration`; provado em 2026-10-03 |
+| `tests-integration-ia` | `npm run test:integration` e `npm run test:contracts` (verificação do provedor) | `ia` com `__tests__/integration`/`__tests__/contracts`, ou mudança em `contracts/**`; provado em 2026-10-03 |
 | `deadcode` | `knip --directory apps/<app>` | apps alterados |
 | `e2e-frontend` | `playwright test --config playwright.e2e.config.js` | **optIn**, ainda não provado verde (ver abaixo) |
 
@@ -281,8 +281,10 @@ de teste do Redis, configurados no `apps/<app>/.env.testing` de cada app.
 
 - **Partes, cada uma só quando a pasta dela existe:**
   - `__tests__/integration` → `npm run test:integration`, que aplica as migrations de teste antes;
-  - `__tests__/contracts` → `npm run test:contracts`, **só no `ia`**: a verificação do provedor contra os pacts do
-    backend.
+  - `__tests__/contracts` → `npm run test:contracts`, **só no `ia`** (`verifiesContracts` no
+    [scripts/runGate.mjs](scripts/runGate.mjs)): a verificação do provedor contra os pacts do backend. Os testes de
+    contrato do backend são consumidores e ficam com o `tests-backend`, que os roda numa pasta temporária. Rodá-los
+    aqui regravaria o pact versionado.
 
   Sem nenhuma das duas, o gate é no-op.
 - **Quando roda:** o `tests-integration-backend` roda quando muda algo em `apps/backend/`. O `tests-integration-ia` roda
@@ -294,10 +296,10 @@ de teste do Redis, configurados no `apps/<app>/.env.testing` de cada app.
   `not reachable: MySQL (127.0.0.1:3306)` e a instrução `./dev.sh --infra`.
 - **`INTEGRATION_SKIP=1`** pula o gate com um banner de "não verificado", e o resumo marca `SKIPPED`.
 
-### Estado: ainda não provados
+### Estado: provados contra o banco real em 2026-10-03
 
-Os dois gates foram criados em 2026-10-03, antes da implementação da F01. Até ali não existiam testes de integração, o
-`./dev.sh` nem a infraestrutura. O que foi provado com arquivos temporários:
+Os dois gates foram criados antes da implementação da F01. Nessa rodada prévia, com arquivos temporários, ficou
+provado:
 - no-op sem as pastas;
 - falha com pasta sem script;
 - falha sem `.env.testing`;
@@ -305,8 +307,9 @@ Os dois gates foram criados em 2026-10-03, antes da implementação da F01. Até
 - `SKIPPED` com `INTEGRATION_SKIP=1`;
 - disparo da parte de contratos por `contracts/**`.
 
-**Falta a prova falha → passa contra o banco real.** Ela é feita por uma rodada curta da `gate-builder` depois da
-implementação da F01, e a data é registrada aqui.
+Depois da implementação da F01, com o `./dev.sh --infra` no ar, a prova falha → passa foi feita contra o MySQL e o Redis
+reais (detalhes no Histórico). Os dois gates estão na cadeia padrão e valem como gates de integração para as skills do
+SDD.
 
 ## Conferência dos contratos (`tests-backend`)
 
@@ -426,9 +429,11 @@ Gate verde não significa feature verificada. O que está abaixo continua sendo 
   em outra função ou módulo), e o `no-knex-raw` não sabe o que um helper monta. O `check-architecture` busca texto, linha
   a linha: um `process.env` montado dinamicamente escapa.
 - **Qualidade dos testes.** A cobertura mede linhas executadas, não asserções.
-- **Integração com banco e Redis, até a prova.** Os gates de integração existem, mas ainda não foram provados contra o
-  banco real (ver acima). N+1 em tempo de execução (crescimento do número de consultas) é medido pelos testes de
-  integração da `integration-test-writer`, não por um gate próprio.
+- **Integração além do que os testes cobrem.** Os gates de integração rodam só os testes que existem: um endpoint sem
+  teste de integração passa sem ter tocado o banco. O N+1 em tempo de execução (o crescimento do número de consultas)
+  é medido pelos testes de integração da `integration-test-writer`, não por um gate próprio.
+- **O `.env.testing` de cada app.** Ninguém confere se a senha dele bate com a do `.env.infra`: se divergir, o gate de
+  integração falha na conexão com `Access denied`, o que é um problema de ambiente, não de código.
 - **Serviços externos.** O PRD proíbe que um teste chame a OpenAI ou o Google. As demos contra os provedores reais são
   manuais.
 - **A infraestrutura dos próprios gates.** `scripts/`, `tests/e2e/` e as regras em `apps/frontend/tools/` não passam
@@ -455,6 +460,30 @@ Gate verde não significa feature verificada. O que está abaixo continua sendo 
    e ao `ARCH_TS_CONFIG` em [scripts/gates/code.mjs](scripts/gates/code.mjs).
 
 ## Histórico
+
+### 2026-10-03: rodada posterior à F01
+
+A implementação da F01 trouxe os testes de integração, os contratos e o `./dev.sh --infra`. Esta rodada provou os dois
+gates de integração contra o banco real e corrigiu uma divergência entre o código e este documento.
+
+- **Correção:** o `integrationGate` rodava a parte de contratos em qualquer app com `__tests__/contracts`. Então o
+  `tests-integration-backend` rodava o `test:contracts` do backend sem `PACT_DIR` e regravava o pact versionado em
+  `contracts/pacts/`. Agora a parte de contratos só roda no app que a declara (`verifiesContracts`, só no `ia`).
+- **`tests-integration-backend`, contra o `web_test` e o Redis db 3:**
+  - PASS com os 10 testes da F01. Roda só o `test:integration`, e o pact versionado não é tocado (mesmo hash e mesmo
+    mtime);
+  - FAIL com uma asserção quebrada em `__tests__/integration/health.test.js` (1 de 10);
+  - FAIL com o `DB_PASSWORD` errado no `.env.testing` (`Access denied for user 'web_app'`): o gate fala com o MySQL,
+    não só abre a porta;
+  - FAIL com uma migration temporária que rejeita no `up`: o `migrations:test` roda antes da suíte e a barra;
+  - PASS de novo depois de restaurar os três probes. A migration temporária não deixou registro no `knex_migrations`.
+- **`tests-integration-ia`, contra o `gateway_test` e o Redis db 2:**
+  - PASS com as duas partes: 9 testes de integração e 4 de contrato (verificação do pact e as duas provas negativas);
+  - FAIL com uma asserção quebrada em `__tests__/integration/health.test.ts`;
+  - FAIL com o pact versionado alterado (o `code` do 401 trocado) e o escopo só em `contracts/pacts/`: só a parte de
+    contratos rodou, e a verificação apontou a divergência;
+  - PASS de novo depois de restaurar.
+- **Cadeia padrão verde** sobre o repositório inteiro, com os dois gates provados.
 
 ### 2026-10-03: rodada prévia da F01
 

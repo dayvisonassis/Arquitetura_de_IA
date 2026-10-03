@@ -137,7 +137,11 @@ const GATES = [
   {
     id: 'tests-integration-ia',
     label: 'ia integration and provider contract tests (gateway_test)',
-    run: scope => integrationGate(scope, 'ia', { triggers: ['contracts/'] })
+    run: scope =>
+      integrationGate(scope, 'ia', {
+        triggers: ['contracts/'],
+        verifiesContracts: true
+      })
   },
   {
     id: 'deadcode',

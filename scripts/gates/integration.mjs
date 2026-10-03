@@ -6,10 +6,8 @@ import { NOOP, SKIPPED } from './code.mjs'
 import { banner, hasNpmScript, runNpmScript } from './exec.mjs'
 import { appScope } from './scope.mjs'
 
-const PARTS = [
-  { dir: 'integration', script: 'test:integration' },
-  { dir: 'contracts', script: 'test:contracts' }
-]
+const INTEGRATION = { dir: 'integration', script: 'test:integration' }
+const CONTRACTS = { dir: 'contracts', script: 'test:contracts' }
 
 function readEnvFile(file) {
   return Object.fromEntries(
@@ -76,15 +74,19 @@ async function infrastructureReady(target) {
   return true
 }
 
-function partsToRun(target, triggered) {
-  return PARTS.filter(
+function partsToRun(target, triggered, candidates) {
+  return candidates.filter(
     part =>
       existsSync(path.join(target.dir, '__tests__', part.dir)) &&
-      (target.touched || (triggered && part.dir === 'contracts'))
+      (target.touched || (triggered && part === CONTRACTS))
   )
 }
 
-export async function integrationGate(scope, app, { triggers = [] } = {}) {
+export async function integrationGate(
+  scope,
+  app,
+  { triggers = [], verifiesContracts = false } = {}
+) {
   const target = appScope(scope, app)
   const triggered = scope.files.some(file =>
     triggers.some(prefix => file.startsWith(prefix))
@@ -93,9 +95,14 @@ export async function integrationGate(scope, app, { triggers = [] } = {}) {
     console.log(`  ${app}: no changed files`)
     return NOOP
   }
-  const parts = partsToRun(target, triggered)
+  const candidates = verifiesContracts
+    ? [INTEGRATION, CONTRACTS]
+    : [INTEGRATION]
+  const parts = partsToRun(target, triggered, candidates)
   if (parts.length === 0) {
-    console.log(`  ${app}: no __tests__/integration or __tests__/contracts`)
+    console.log(
+      `  ${app}: no ${candidates.map(part => `__tests__/${part.dir}`).join(' or ')}`
+    )
     return NOOP
   }
   if (process.env.INTEGRATION_SKIP === '1') {
