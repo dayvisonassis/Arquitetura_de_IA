@@ -3,3 +3,9 @@ dist/
 coverage/
 .env
 *.log
+test-results/
+playwright-report/
+tests/e2e/.auth/
+
+# Material interno; nunca versionar
+docs/private/

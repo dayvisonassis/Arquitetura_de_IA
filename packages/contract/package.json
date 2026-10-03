@@ -1,0 +1,11 @@
+{
+  "name": "@arquitetura-de-ia/contract",
+  "version": "1.0.0",
+  "description": "Contrato entre o proxy e o sistema web: capacidades, códigos de erro, headers e schemas (implementado a partir da F01)",
+  "private": true,
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "jest": "^30.5.2",
+    "ts-jest": "^29.4.13"
+  }
+}

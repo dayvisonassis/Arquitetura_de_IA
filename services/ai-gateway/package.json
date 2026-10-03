@@ -1,0 +1,11 @@
+{
+  "name": "@arquitetura-de-ia/ai-gateway",
+  "version": "1.0.0",
+  "description": "Proxy de IA compatível com a API da OpenAI e API administrativa (implementado a partir da F01)",
+  "private": true,
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "jest": "^30.5.2",
+    "ts-jest": "^29.4.13"
+  }
+}

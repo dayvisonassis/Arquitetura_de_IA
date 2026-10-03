@@ -7,12 +7,14 @@ const nodeGlobals = {
   module: 'writable',
   require: 'readonly',
   __dirname: 'readonly',
+  fetch: 'readonly',
+  AbortSignal: 'readonly',
 };
 
 export default tseslint.config(
-  { ignores: ['dist/', 'coverage/', 'node_modules/', '.claude/'] },
+  { ignores: ['**/dist/', '**/coverage/', 'node_modules/', '.claude/', 'test-results/', 'playwright-report/'] },
 
-  // TypeScript (src + tests) — lint com informação de tipos
+  // TypeScript (src + tests de cada workspace, e2e na raiz) — lint com informação de tipos
   {
     files: ['**/*.ts'],
     extends: [js.configs.recommended, ...tseslint.configs.recommendedTypeChecked],
@@ -32,7 +34,7 @@ export default tseslint.config(
 
   // Testes: supertest/jest retornam `any` em pontos que não valem tipar
   {
-    files: ['tests/**/*.ts'],
+    files: ['**/tests/**/*.ts'],
     rules: {
       '@typescript-eslint/no-unsafe-member-access': 'off',
       '@typescript-eslint/no-unsafe-assignment': 'off',
