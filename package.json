@@ -14,7 +14,26 @@
     "test:backend": "cd apps/backend && npm run test:unit",
     "test:ia": "cd apps/ia && npm test",
     "test:ia_simulator": "cd apps/ia_simulator && npm test",
-    "test": "npm run test:frontend && npm run test:backend && npm run test:ia && npm run test:ia_simulator"
+    "test": "npm run test:frontend && npm run test:backend && npm run test:ia && npm run test:ia_simulator",
+    "test:e2e": "playwright test --config playwright.e2e.config.js",
+    "gate": "node scripts/runGate.mjs",
+    "gate:typecheck-frontend": "node scripts/runGate.mjs typecheck-frontend",
+    "gate:typecheck-monorepo": "node scripts/runGate.mjs typecheck-monorepo",
+    "gate:lint-backend": "node scripts/runGate.mjs lint-backend",
+    "gate:raw-sql-backend": "node scripts/runGate.mjs raw-sql-backend",
+    "gate:query-loop-backend": "node scripts/runGate.mjs query-loop-backend",
+    "gate:lint-frontend": "node scripts/runGate.mjs lint-frontend",
+    "gate:lint-monorepo": "node scripts/runGate.mjs lint-monorepo",
+    "gate:styles-frontend": "node scripts/runGate.mjs styles-frontend",
+    "gate:build-backend": "node scripts/runGate.mjs build-backend",
+    "gate:build-monorepo": "node scripts/runGate.mjs build-monorepo",
+    "gate:build-frontend": "node scripts/runGate.mjs build-frontend",
+    "gate:arch": "node scripts/runGate.mjs arch",
+    "gate:tests-backend": "node scripts/runGate.mjs tests-backend",
+    "gate:tests-frontend": "node scripts/runGate.mjs tests-frontend",
+    "gate:tests-monorepo": "node scripts/runGate.mjs tests-monorepo",
+    "gate:deadcode": "node scripts/runGate.mjs deadcode",
+    "gate:e2e-frontend": "node scripts/runGate.mjs e2e-frontend"
   },
   "lint-staged": {
     "apps/frontend/src/**/*.{ts,html}": [
@@ -39,8 +58,12 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
+    "dependency-cruiser": "^18.5.0",
     "husky": "^9.1.7",
+    "knip": "^6.39.0",
     "lint-staged": "^17.6.0",
-    "prettier": "3.8.3"
+    "picomatch": "^4.0.7",
+    "prettier": "3.8.3",
+    "typescript": "~5.6.3"
   }
 }

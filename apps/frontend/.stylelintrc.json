@@ -1,0 +1,15 @@
+{
+  "plugins": ["./tools/stylelint-rules/index.mjs"],
+  "rules": {
+    "color-no-invalid-hex": true,
+    "property-no-unknown": true,
+    "tails/no-important-on-tokens": true,
+    "tails/no-hardcoded-hex": true
+  },
+  "overrides": [
+    {
+      "files": ["src/themes/**"],
+      "rules": { "tails/no-hardcoded-hex": null }
+    }
+  ]
+}

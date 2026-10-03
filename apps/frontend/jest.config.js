@@ -14,16 +14,20 @@ module.exports = {
     '!src/app/**/*-routing.ts'
   ],
   coverageDirectory: 'coverage',
+  coverageProvider: 'v8',
+  coverageThreshold: {
+    global: { branches: 80, functions: 80, lines: 80, statements: 80 }
+  },
   moduleNameMapper: {
     '^app/(.*)$': '<rootDir>/src/app/$1',
     '^environments/(.*)$': '<rootDir>/src/environments/$1'
   },
   transform: {
-    '^.+\.(ts|mjs|js|html)$': [
+    '^.+\\.(ts|mjs|js|html)$': [
       'jest-preset-angular',
       {
         tsconfig: '<rootDir>/src/tsconfig.spec.json',
-        stringifyContentPathRegex: '\.html$'
+        stringifyContentPathRegex: '\\.html$'
       }
     ]
   }
