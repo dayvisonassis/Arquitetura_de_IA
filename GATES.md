@@ -362,17 +362,20 @@ O login só existe a partir da F04. Até lá, o global setup falha com a mensage
 flow arrives with F04`. Por isso o gate é optIn e **não conta como suíte e2e** para as skills do SDD.
 
 A F04 completa o harness (é trabalho de gate, feito pela `gate-builder`):
-1. o login no global setup, pela API, com as contas de `E2E_ADMIN_LOGIN`/`E2E_ADMIN_PASSWORD` e
-   `E2E_AGENT_LOGIN`/`E2E_AGENT_PASSWORD`, gravando o `currentUser` no `localStorage` do storage state;
-2. a configuração anti-bot de não produção, se a F04 tiver uma, documentada aqui;
-3. as sementes conferindo o marcador da tela autenticada, e a do `agent` conferindo pela `adminApi` que as duas
-   contas estão no mesmo domínio;
-4. a prova falha → passa (quebrar uma semente de propósito), o registro da data aqui e a entrada do gate na cadeia
+1. o perfil `admin_platform` (projeto, semente e fixture de API), ao lado de `admin` e `agent`;
+2. o login no global setup, pela API, com as contas de `E2E_ADMIN_PLATFORM_LOGIN`/`E2E_ADMIN_PLATFORM_PASSWORD`,
+   `E2E_ADMIN_LOGIN`/`E2E_ADMIN_PASSWORD` e `E2E_AGENT_LOGIN`/`E2E_AGENT_PASSWORD`, gravando o `currentUser` no
+   `localStorage` do storage state;
+3. a configuração anti-bot de não produção, se a F04 tiver uma, documentada aqui;
+4. as sementes conferindo o marcador da tela autenticada, e a do `agent` conferindo pela `adminApi` que as contas de
+   `admin` e `agent` estão no mesmo domínio;
+5. a prova falha → passa (quebrar uma semente de propósito), o registro da data aqui e a entrada do gate na cadeia
    padrão.
 
-**Provisório, para o time confirmar:** o mapeamento de perfis (`admin` = `domain_admin`, `agent` = `user`), os nomes
-das variáveis das contas e o diretório `tests/e2e/<perfil>/`. Os fluxos do `platform_admin` ficam nos testes de
-integração; um terceiro perfil exigiria adaptar as regras da `e2e-test-writer`.
+**Decidido em 2026-10-03:** três perfis, `admin_platform` = `platform_admin`, `admin` = `domain_admin` e
+`agent` = `user`, com as variáveis acima e o diretório `tests/e2e/<perfil>/`. As senhas ficam só nos arquivos de
+ambiente locais. O banco de desenvolvimento começa vazio e é só de teste. As regras da `e2e-test-writer` hoje aceitam
+só `admin` e `agent`: o terceiro perfil depende de adaptá-las no repositório das skills antes da rodada da F04.
 
 ## Ainda não construído
 
@@ -399,7 +402,8 @@ integração; um terceiro perfil exigiria adaptar as regras da `e2e-test-writer`
     correção na linha 19 (a primeira versão corrigida é a 21.2.25, uma major). Parte vale só para SSR, hidratação e
     `HttpTransferCache`, que este app não usa. Os que valem para um app só no navegador: bypass de sanitização em
     binding bidirecional e em host bindings de diretivas (XSS), XSS por atributos de evento com i18n, e DoS por memória
-    no `formatDate`. A versão 19.2 é a que o PRD fixa: a decisão de subir é do time;
+    no `formatDate`. **Risco aceito em 2026-10-03:** o app fica na 19.2, que o PRD fixa, para manter a mesma versão
+    do sistema para onde o que se aprende aqui será portado;
   - **backend, `ia`, `ia_simulator`:** produção limpa (`npm audit --omit=dev`). As dependências de desenvolvimento
     trazem o `braces` (DoS por padrões de glob muito aninhados) via jest e ts-node-dev.
 
