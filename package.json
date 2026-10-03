@@ -3,7 +3,44 @@
   "version": "1.0.0",
   "description": "AI Gateway: proxy de IA multi-tenant e sistema web, em apps independentes",
   "private": true,
+  "scripts": {
+    "prepare": "husky",
+    "lint:frontend": "cd apps/frontend && npm run lint:check",
+    "lint:backend": "cd apps/backend && npm run lint:check",
+    "lint:ia": "cd apps/ia && npm run lint:check",
+    "lint:ia_simulator": "cd apps/ia_simulator && npm run lint:check",
+    "lint": "npm run lint:frontend && npm run lint:backend && npm run lint:ia && npm run lint:ia_simulator",
+    "test:frontend": "cd apps/frontend && npm test",
+    "test:backend": "cd apps/backend && npm run test:unit",
+    "test:ia": "cd apps/ia && npm test",
+    "test:ia_simulator": "cd apps/ia_simulator && npm test",
+    "test": "npm run test:frontend && npm run test:backend && npm run test:ia && npm run test:ia_simulator"
+  },
+  "lint-staged": {
+    "apps/frontend/src/**/*.{ts,html}": [
+      "node scripts/lint-staged-eslint.mjs frontend",
+      "prettier --write --config apps/frontend/.prettierrc"
+    ],
+    "apps/frontend/src/**/*.{css,scss}": [
+      "prettier --write --config apps/frontend/.prettierrc"
+    ],
+    "apps/backend/**/*.js": [
+      "node scripts/lint-staged-eslint.mjs backend",
+      "prettier --write --config apps/backend/.prettierrc"
+    ],
+    "apps/ia/**/*.ts": [
+      "node scripts/lint-staged-eslint.mjs ia",
+      "prettier --write --config apps/ia/.prettierrc"
+    ],
+    "apps/ia_simulator/**/*.ts": [
+      "node scripts/lint-staged-eslint.mjs ia_simulator",
+      "prettier --write --config apps/ia_simulator/.prettierrc"
+    ]
+  },
   "devDependencies": {
-    "@playwright/test": "^1.63.0"
+    "@playwright/test": "^1.63.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0",
+    "prettier": "3.8.3"
   }
 }

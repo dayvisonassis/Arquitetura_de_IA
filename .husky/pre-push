@@ -1,0 +1,18 @@
+echo "Running ESLint checks (non-blocking)..."
+
+LINT_FAILED=0
+
+for app in frontend backend ia ia_simulator; do
+  if [ -d "apps/$app/node_modules" ]; then
+    (cd "apps/$app" && npm run --silent lint:check) || LINT_FAILED=1
+  else
+    echo "apps/$app has no node_modules: lint skipped"
+    LINT_FAILED=1
+  fi
+done
+
+if [ "$LINT_FAILED" = "1" ]; then
+  echo "Lint found problems in at least one app (non-blocking)."
+else
+  echo "All lint checks passed."
+fi
