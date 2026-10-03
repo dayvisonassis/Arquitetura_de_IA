@@ -5,6 +5,7 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve --host 127.0.0.1 --port 4200",
+    "start:docker": "ng serve --host 0.0.0.0 --port 4200 --poll 2000",
     "build": "ng build",
     "test": "jest",
     "test:watch": "jest --watch",

@@ -22,6 +22,19 @@ Nenhum teste cria dados, então não há limpeza por teste. Sem endpoint: cresci
 | `should authenticate and answer PING on the test Redis` | `ping()` com a senha e o db 3 do `.env.testing` | `PONG` |
 | `should reuse the open connection on the next PING` | dois `ping()` seguidos | `PONG`, sem reconectar |
 
+### `health.test.js` — `/health/*` contra o MySQL e o Redis de teste
+
+Nenhum dado criado. Crescimento de consultas (um desfecho por endpoint):
+- `GET /health/live`: `not measurable — source not counted` (não consulta o banco);
+- `GET /health/ready`: `not measurable — fixed-size result`.
+
+| Teste | Entrada | Esperado |
+|---|---|---|
+| `should answer 200 with status ok and a request id` | `GET /health/live` | 200 `{ status: ok }`, `x-request-id` com 32 hex |
+| `should report ok with MySQL and Redis up` | `GET /health/ready` | 200, `mysql` e `redis` em `ok` |
+| `should stay ok on repeated calls, reusing the connections` | duas chamadas | 200 nas duas |
+| `should answer without authentication and outside /v2` | `Authorization` qualquer | 200 |
+
 ## Proxy (`apps/ia/__tests__/integration/`), pelo fallback do `implement-feature`
 
 Nenhuma skill cobre os testes de integração do proxy (spec §3). Seguem o mesmo molde do backend.
@@ -38,3 +51,9 @@ Nenhuma skill cobre os testes de integração do proxy (spec §3). Seguem o mesm
 ### `redis-client.test.ts` — cliente Redis do proxy
 
 Os mesmos dois casos do backend, contra o db 2.
+
+### `health.test.ts` — `/health/*` contra `gateway_test` e o Redis db 2
+
+- [x] `GET /health/live` → 200 com `x-request-id`
+- [x] `should report ok with MySQL and Redis up`
+- [x] `/health/ready` sem master key, em chamadas repetidas
