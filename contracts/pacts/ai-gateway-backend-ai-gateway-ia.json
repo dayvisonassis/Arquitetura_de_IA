@@ -1,0 +1,95 @@
+{
+  "consumer": {
+    "name": "ai-gateway-backend"
+  },
+  "interactions": [
+    {
+      "description": "an admin request with a wrong master key",
+      "request": {
+        "headers": {
+          "Authorization": "Bearer wrong-master-key-0123456789abcdefghijklm",
+          "x-request-id": "4bf92f3577b34da6a3ce929d0e0e4736"
+        },
+        "method": "GET",
+        "path": "/admin/domains"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "invalid_admin_key",
+            "message": "Chave administrativa ausente ou inválida.",
+            "type": "authentication_error"
+          }
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8",
+          "x-request-id": "4bf92f3577b34da6a3ce929d0e0e4736"
+        },
+        "matchingRules": {
+          "body": {
+            "$.error.message": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            }
+          }
+        },
+        "status": 401
+      }
+    },
+    {
+      "description": "an admin request without the master key",
+      "request": {
+        "headers": {
+          "x-request-id": "4bf92f3577b34da6a3ce929d0e0e4736"
+        },
+        "method": "GET",
+        "path": "/admin/domains"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "invalid_admin_key",
+            "message": "Chave administrativa ausente ou inválida.",
+            "type": "authentication_error"
+          }
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8",
+          "x-request-id": "4bf92f3577b34da6a3ce929d0e0e4736"
+        },
+        "matchingRules": {
+          "body": {
+            "$.error.message": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            }
+          }
+        },
+        "status": 401
+      }
+    }
+  ],
+  "metadata": {
+    "pact-js": {
+      "version": "15.0.1"
+    },
+    "pactRust": {
+      "ffi": "0.4.28",
+      "models": "1.3.5"
+    },
+    "pactSpecification": {
+      "version": "3.0.0"
+    }
+  },
+  "provider": {
+    "name": "ai-gateway-ia"
+  }
+}
