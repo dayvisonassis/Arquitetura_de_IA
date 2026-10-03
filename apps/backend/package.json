@@ -1,0 +1,34 @@
+{
+  "name": "ai-gateway-backend",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "dev": "cross-env NODE_ENV=development nodemon --exec babel-node ./index.js",
+    "build": "babel index.js -d dist && babel src -d dist/src",
+    "prod": "cross-env NODE_ENV=production node dist/index.js",
+    "test:unit": "cross-env NODE_ENV=testing jest __tests__/unit/",
+    "lint": "eslint . --ext .js",
+    "lint:fix": "eslint . --ext .js --fix",
+    "lint:check": "eslint . --ext .js --max-warnings 0",
+    "format": "prettier --write --config ./.prettierrc \"**/*.js\"",
+    "format:check": "prettier --check --config ./.prettierrc \"**/*.js\"",
+    "check": "npm run lint:check && npm run format:check"
+  },
+  "dependencies": {
+    "express": "^4.22.3"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.29.7",
+    "@babel/core": "^7.29.7",
+    "@babel/node": "^7.29.7",
+    "@babel/preset-env": "^7.29.7",
+    "cross-env": "^7.0.3",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^10.1.8",
+    "jest": "^30.5.2",
+    "nodemon": "^3.1.14",
+    "prettier": "3.8.3",
+    "supertest": "^7.3.1"
+  }
+}
