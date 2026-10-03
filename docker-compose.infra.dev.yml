@@ -1,0 +1,58 @@
+name: ai-gateway-infra
+
+services:
+  mysql:
+    image: mysql:8.4@sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is missing in .env.infra}
+      GATEWAY_DB_PASSWORD: ${GATEWAY_DB_PASSWORD:?GATEWAY_DB_PASSWORD is missing in .env.infra}
+      WEB_DB_PASSWORD: ${WEB_DB_PASSWORD:?WEB_DB_PASSWORD is missing in .env.infra}
+    ports:
+      - '127.0.0.1:3306:3306'
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./infra/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'MYSQL_PWD="$$MYSQL_ROOT_PASSWORD" mysqladmin ping -h 127.0.0.1 --protocol=tcp -uroot --silent'
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 90s
+      start_interval: 2s
+    networks:
+      - ai-gateway-dev-net
+
+  redis:
+    image: redis:7.4-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is missing in .env.infra}
+    command:
+      [
+        'sh',
+        '-c',
+        'exec redis-server --requirepass "$$REDIS_PASSWORD" --save "" --appendonly no'
+      ]
+    ports:
+      - '127.0.0.1:6379:6379'
+    healthcheck:
+      test:
+        ['CMD-SHELL', 'REDISCLI_AUTH="$$REDIS_PASSWORD" redis-cli ping | grep -q PONG']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+      start_interval: 1s
+    networks:
+      - ai-gateway-dev-net
+
+networks:
+  ai-gateway-dev-net:
+    external: true
+    name: ai-gateway-dev-net
+
+volumes:
+  mysql-data:
