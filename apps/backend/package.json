@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "cross-env NODE_ENV=development nodemon --legacy-watch --exec babel-node ./index.js",
+    "start:docker": "cross-env NODE_ENV=development nodemon --legacy-watch --exec babel-node ./index.js",
     "build": "babel index.js loader.js database.js knexfile.js redis-client.js -d dist && babel src -d dist/src",
     "prod": "cross-env NODE_ENV=production node dist/index.js",
     "test:unit": "cross-env NODE_ENV=testing jest __tests__/unit/",

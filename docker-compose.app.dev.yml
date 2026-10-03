@@ -1,0 +1,130 @@
+name: ai-gateway-app
+
+x-dev-app: &dev-app
+  working_dir: /app
+  entrypoint: ['sh', '/usr/local/bin/dev-entrypoint.sh']
+  init: true
+  networks:
+    - ai-gateway-dev-net
+
+x-healthcheck: &healthcheck
+  interval: 5s
+  timeout: 4s
+  retries: 12
+  start_interval: 2s
+
+services:
+  frontend:
+    <<: *dev-app
+    build:
+      context: apps/frontend
+      target: development
+    command: ['npm', 'run', 'start:docker']
+    volumes:
+      - ./apps/frontend:/app
+      - frontend-node-modules:/app/node_modules
+      - ./scripts/dev-entrypoint.sh:/usr/local/bin/dev-entrypoint.sh:ro
+    ports:
+      - '127.0.0.1:4200:4200'
+    healthcheck:
+      <<: *healthcheck
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:4200/').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+        ]
+      start_period: 300s
+
+  backend:
+    <<: *dev-app
+    build:
+      context: apps/backend
+      target: development
+    command: ['npm', 'run', 'start:docker']
+    env_file: apps/backend/.env.development
+    environment:
+      API_HOST: 0.0.0.0
+      DB_HOST: mysql
+      REDIS_HOST: redis
+      GATEWAY_URL: http://ia:3131
+    volumes:
+      - ./apps/backend:/app
+      - backend-node-modules:/app/node_modules
+      - ./scripts/dev-entrypoint.sh:/usr/local/bin/dev-entrypoint.sh:ro
+    ports:
+      - '127.0.0.1:3030:3030'
+    healthcheck:
+      <<: *healthcheck
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3030/health/ready').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+        ]
+      start_period: 180s
+
+  ia:
+    <<: *dev-app
+    build:
+      context: apps/ia
+      target: development
+    command: ['npm', 'run', 'dev:docker']
+    env_file: apps/ia/.env.development
+    environment:
+      API_HOST: 0.0.0.0
+      DB_HOST: mysql
+      REDIS_HOST: redis
+    volumes:
+      - ./apps/ia:/app
+      - ia-node-modules:/app/node_modules
+      - ./scripts/dev-entrypoint.sh:/usr/local/bin/dev-entrypoint.sh:ro
+    ports:
+      - '127.0.0.1:3131:3131'
+    healthcheck:
+      <<: *healthcheck
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3131/health/ready').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+        ]
+      start_period: 180s
+
+  ia_simulator:
+    <<: *dev-app
+    build:
+      context: apps/ia_simulator
+      target: development
+    command: ['npm', 'run', 'dev:docker']
+    env_file: apps/ia_simulator/.env.development
+    environment:
+      API_HOST: 0.0.0.0
+    volumes:
+      - ./apps/ia_simulator:/app
+      - ia-simulator-node-modules:/app/node_modules
+      - ./scripts/dev-entrypoint.sh:/usr/local/bin/dev-entrypoint.sh:ro
+    healthcheck:
+      <<: *healthcheck
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3132/health/live').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+        ]
+      start_period: 180s
+
+networks:
+  ai-gateway-dev-net:
+    external: true
+    name: ai-gateway-dev-net
+
+volumes:
+  frontend-node-modules:
+  backend-node-modules:
+  ia-node-modules:
+  ia-simulator-node-modules:

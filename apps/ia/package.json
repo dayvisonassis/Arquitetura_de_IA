@@ -5,6 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "cross-env NODE_ENV=development ts-node-dev --respawn --transpile-only --ignore node_modules index.ts",
+    "dev:docker": "cross-env NODE_ENV=development ts-node-dev --respawn --poll --transpile-only --ignore node_modules index.ts",
     "build": "tsc",
     "prod": "cross-env NODE_ENV=production node dist/index.js",
     "lint": "eslint . --ext .ts,.js",

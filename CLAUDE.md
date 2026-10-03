@@ -52,7 +52,12 @@ fonte da verdade das regras de produto.
 
 - Os gates rodam sempre da raiz, com `npm run gate`. A lista de gates e o comportamento de cada um ficam no
   [GATES.md](GATES.md).
-- Nenhum teste chama um provedor de IA real (OpenAI ou Google); os testes usam o `apps/ia_simulator` ou mocks.
+- Nenhum teste chama um provedor de IA real (OpenAI ou Google); os testes usam o `apps/ia_simulator` ou mocks. O
+  `__tests__/setupTests.ts` do proxy recusa qualquer chamada aos hosts dos provedores.
+- Os testes de integração e de contrato rodam fora dos containers e precisam só do `./dev.sh --infra`. O `npm test`
+  de cada app roda só `__tests__/unit` e não precisa de banco.
+- Um contrato novo com o proxy segue o [contracts/README.md](contracts/README.md), e o pact regenerado entra no mesmo
+  commit.
 - As skills de teste do fluxo SDD pressupõem este layout: `apps/frontend/src/**/*.spec.ts`,
   `apps/backend/__tests__/{unit,integration}`, `apps/<app>/__tests__/unit` nos apps em TypeScript e `tests/e2e/` na
   raiz.
@@ -69,10 +74,25 @@ fonte da verdade das regras de produto.
 
 ## Segredos e material interno
 
-- Cada app de servidor lê as variáveis de `apps/<app>/.env.<ambiente>`, que fica fora do Git. Os modelos versionados
-  ficam em `apps/<app>/config/.env.<ambiente>.example`, só com os nomes das variáveis.
+- Cada app de servidor lê as variáveis de `apps/<app>/.env.<ambiente>`, que fica fora do Git. As senhas da
+  infraestrutura ficam no `.env.infra` da raiz, também fora do Git.
+- **Modelos `.env.*.example`** (`apps/<app>/config/` e `config/.env.infra.example`): trazem **todas** as variáveis
+  que o `src/config/env` do app lê. Valores de exemplo só para o que não é segredo (hosts, portas, nomes de schema,
+  número do banco Redis); segredos ficam vazios. A exceção são as chaves fictícias dos provedores no
+  `.env.testing.example` do proxy. Variável nova no `src/config/env` entra nos três modelos do app no mesmo commit.
 - Nunca escreva chaves, senhas, hosts internos ou IPs em arquivos versionados.
 - Material que descreve o sistema de produção fica em `docs/private/`, que o Git ignora.
+
+## Ambiente local
+
+- `./dev.sh` sobe o MySQL, o Redis e os quatro apps (projetos compose `ai-gateway-infra` e `ai-gateway-app`, rede
+  `ai-gateway-dev-net`) e aplica as migrations; `./dev.sh --infra` sobe só a infraestrutura; `./dev.sh --down` derruba
+  tudo e mantém os volumes. O preparo dos arquivos de ambiente está no [README](README.md).
+- Logs: `docker compose -p ai-gateway-app logs -f <serviço>`.
+- O init do MySQL só roda com o volume vazio. Recriar o volume `ai-gateway-infra_mysql-data` apaga os dados locais:
+  peça autorização antes.
+- O PRD fixa as portas (`4200`, `3030`, `3131`, `3306`, `6379`). Se outra coisa ocupar uma delas, não troque a porta:
+  avise o usuário.
 
 ## Ambiente local Windows
 
