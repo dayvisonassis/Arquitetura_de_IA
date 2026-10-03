@@ -1,41 +1,9 @@
 {
   "name": "arquitetura-de-ia",
   "version": "1.0.0",
-  "description": "AI Gateway: proxy de IA multi-tenant e sistema web, em npm workspaces",
+  "description": "AI Gateway: proxy de IA multi-tenant e sistema web, em apps independentes",
   "private": true,
-  "workspaces": [
-    "packages/*",
-    "services/*",
-    "apps/*"
-  ],
-  "scripts": {
-    "dev": "tsx watch apps/web/src/server.ts",
-    "build": "npm run build --workspaces --if-present",
-    "start": "node apps/web/dist/server.js",
-    "test": "npm test --workspaces --if-present",
-    "test:e2e": "playwright test --config playwright.e2e.config.ts",
-    "lint": "eslint . --max-warnings=0",
-    "gate": "node scripts/runGate.mjs",
-    "gate:typecheck": "node scripts/runGate.mjs typecheck",
-    "gate:lint": "node scripts/runGate.mjs lint",
-    "gate:build": "node scripts/runGate.mjs build",
-    "gate:arch": "node scripts/runGate.mjs arch",
-    "gate:tests": "node scripts/runGate.mjs tests",
-    "gate:deadcode": "node scripts/runGate.mjs deadcode",
-    "gate:e2e": "node scripts/runGate.mjs e2e"
-  },
-  "engines": {
-    "node": ">=20"
-  },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
-    "@playwright/test": "^1.63.0",
-    "@types/node": "^26.6.2",
-    "dependency-cruiser": "^18.4.0",
-    "eslint": "^10.11.0",
-    "knip": "^6.38.0",
-    "tsx": "^4.23.15",
-    "typescript": "^6.0.3",
-    "typescript-eslint": "^8.70.1"
+    "@playwright/test": "^1.63.0"
   }
 }
