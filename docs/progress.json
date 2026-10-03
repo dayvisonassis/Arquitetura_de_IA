@@ -1,0 +1,11 @@
+{
+  "config": { "maxFixAttempts": 3 },
+  "features": {
+    "F01": {
+      "state": "PENDING_EVALUATION",
+      "attempt": 0,
+      "lastEvaluationReport": null,
+      "updatedAt": "2026-10-03T23:58:00.000Z"
+    }
+  }
+}
