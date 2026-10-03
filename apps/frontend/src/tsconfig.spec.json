@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../out-tsc/spec",
+    "module": "CommonJS",
+    "types": ["jest", "node"]
+  },
+  "files": ["setup-jest.ts"],
+  "include": ["**/*.spec.ts", "**/*.d.ts"]
+}
