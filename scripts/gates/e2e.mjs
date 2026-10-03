@@ -1,11 +1,9 @@
 import { createRequire } from 'node:module'
 import path from 'node:path'
 
-import { NOOP } from './code.mjs'
-import { binPath, runNode } from './exec.mjs'
+import { NOOP, SKIPPED } from './code.mjs'
+import { banner, binPath, runNode } from './exec.mjs'
 import { ROOT } from './scope.mjs'
-
-export const SKIPPED = 'skipped'
 
 const { API_URL, BASE_URL } = createRequire(path.join(ROOT, 'package.json'))(
   './tests/e2e/sessions.js'
@@ -24,18 +22,6 @@ async function reachable(url) {
   } catch {
     return false
   }
-}
-
-function banner(lines) {
-  const width = Math.max(...lines.map(line => line.length)) + 4
-  const border = '!'.repeat(width)
-  console.warn(
-    [
-      border,
-      ...lines.map(line => `! ${line.padEnd(width - 4)} !`),
-      border
-    ].join('\n')
-  )
 }
 
 export async function e2eGate(scope) {
@@ -62,10 +48,7 @@ export async function e2eGate(scope) {
     console.error(
       [
         `  not reachable: ${down.join(', ')}`,
-        '  The e2e gate needs the app running. Start it and run the gate again:',
-        '    cd apps/frontend && npm start',
-        '    cd apps/backend && npm run dev',
-        '  (from F01 on, ./dev.sh starts everything)'
+        '  The e2e gate needs the app running. Start it with ./dev.sh and run the gate again.'
       ].join('\n')
     )
     return false

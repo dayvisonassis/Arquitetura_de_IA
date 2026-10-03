@@ -44,13 +44,44 @@ export function captureNode(script, args, cwd) {
   }
 }
 
-export function runNpmScript(cwd, script) {
+export function runNpmScript(cwd, script, env = {}) {
   const result = spawnSync('npm', ['run', script], {
     cwd,
     stdio: 'inherit',
-    shell: true
+    shell: true,
+    env: { ...process.env, ...env }
   })
   return result.status === 0
+}
+
+export function hasNpmScript(dir, script) {
+  const manifest = JSON.parse(
+    readFileSync(path.join(dir, 'package.json'), 'utf8')
+  )
+  return Boolean(manifest.scripts?.[script])
+}
+
+export function runSelfTest(testFile, cwd) {
+  const result = spawnSync(process.execPath, ['--test', testFile], {
+    cwd,
+    encoding: 'utf8'
+  })
+  if (result.status !== 0) {
+    process.stderr.write(result.stdout + result.stderr)
+  }
+  return result.status === 0
+}
+
+export function banner(lines) {
+  const width = Math.max(...lines.map(line => line.length)) + 4
+  const border = '!'.repeat(width)
+  console.warn(
+    [
+      border,
+      ...lines.map(line => `! ${line.padEnd(width - 4)} !`),
+      border
+    ].join('\n')
+  )
 }
 
 export function chunks(items) {

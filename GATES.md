@@ -55,15 +55,17 @@ Os gates checam **o que a sua mudança alterou**.
 | `build-monorepo` | `tsc -p tsconfig.json` (para `dist/`) | `ia`, `ia_simulator` alterados |
 | `build-frontend` | `ng build` (produção, AOT) | **optIn**: o frontend inteiro, só por `npm run gate:build-frontend` |
 | `arch` | dependency-cruiser + [scripts/check-architecture.mjs](scripts/check-architecture.mjs) | apps alterados |
-| `tests-backend` | `jest --findRelatedTests <alterados> --coverage` | backend |
-| `tests-frontend` | idem | frontend |
-| `tests-monorepo` | idem, por app | `ia`, `ia_simulator` |
+| `tests-backend` | testes de `__tests__/unit` relacionados aos alterados, com cobertura; e o `test:contracts` inteiro, comparado com `contracts/pacts` (ver abaixo) | backend; os contratos também quando muda `contracts/pacts/**` |
+| `tests-frontend` | specs relacionados aos alterados, com cobertura | frontend |
+| `tests-monorepo` | testes de `__tests__/unit` relacionados aos alterados, com cobertura, por app | `ia`, `ia_simulator` |
+| `tests-integration-backend` | `npm run test:integration` (MySQL e Redis de teste) | backend com `__tests__/integration`; **ainda não provado** |
+| `tests-integration-ia` | `npm run test:integration` e `npm run test:contracts` (verificação do provedor) | `ia` com `__tests__/integration`/`__tests__/contracts`, ou mudança em `contracts/**`; **ainda não provado** |
 | `deadcode` | `knip --directory apps/<app>` | apps alterados |
 | `e2e-frontend` | `playwright test --config playwright.e2e.config.js` | **optIn**, ainda não provado verde (ver abaixo) |
 
 Ordem da cadeia padrão: `typecheck-frontend → typecheck-monorepo → lint-backend → raw-sql-backend →
 query-loop-backend → lint-frontend → lint-monorepo → styles-frontend → build-backend → build-monorepo → arch →
-tests-backend → tests-frontend → tests-monorepo → deadcode`.
+tests-backend → tests-frontend → tests-monorepo → tests-integration-backend → tests-integration-ia → deadcode`.
 
 "Monorepo" aqui são os apps em TypeScript que não são o frontend: `ia` e `ia_simulator`. Um app novo entra em
 `MONOREPO_APPS` (ou na constante equivalente) em [scripts/gates/scope.mjs](scripts/gates/scope.mjs).
@@ -254,18 +256,78 @@ arquivo de violação deliberada (ver Histórico).
 Para cada app alterado:
 
 1. Se mudou a configuração de teste, roda a suíte inteira com cobertura, e o limite vale para o app todo.
-2. Senão, roda os testes relacionados aos arquivos alterados (`--findRelatedTests`). Um `.component.html`/`.css`
-   alterado conta como o `.component.ts` ao lado.
-3. A cobertura é medida **só nos fontes alterados que entram no `collectCoverageFrom`** do app. O limite de 80% em
+2. Senão, roda os testes relacionados aos arquivos alterados (`jest --listTests --findRelatedTests`). Um
+   `.component.html`/`.css` alterado conta como o `.component.ts` ao lado.
+3. **No backend, no `ia` e no `ia_simulator`, só os testes de `__tests__/unit` entram**, nos dois casos acima. O runner
+   filtra a lista e roda os arquivos exatos com `--runTestsByPath`. Os testes de `__tests__/integration` e
+   `__tests__/contracts` ficam com os gates de integração e com a conferência de contratos. O `--testPathPattern` não
+   serve para isso: o jest o combina com os caminhos do `--findRelatedTests` num OU.
+4. A cobertura é medida **só nos fontes alterados que entram no `collectCoverageFrom`** do app. O limite de 80% em
    linhas, statements, funções e branches está no `coverageThreshold` do `jest.config.js` de cada app, então o
    `npm run test:coverage` de cada app também o cobra.
-4. **Um fonte alterado sem nenhum teste relacionado faz o gate falhar** (`changed source with no related test`).
-   Arquivos fora do `collectCoverageFrom` (`index.*`, `main.ts`, rotas) não precisam de teste.
+5. **Um fonte alterado sem nenhum teste unitário relacionado faz o gate falhar** (`changed source with no related
+   test`). Arquivos fora do `collectCoverageFrom` (`index.*`, `main.ts`, rotas) não precisam de teste.
 
 As convenções dos testes estão nas skills do fluxo SDD. Este repositório segue o layout que elas esperam:
 `unit-test-writer` (frontend e `apps/backend/__tests__/unit`), `integration-test-writer`
-(`apps/backend/__tests__/integration`, a partir da F01), `monorepo-unit-test-writer` (`ia`, `ia_simulator`) e
-`e2e-test-writer` (`tests/e2e`). O `implement-feature` as aciona por feature.
+(`apps/backend/__tests__/integration`), `monorepo-unit-test-writer` (`ia`, `ia_simulator`) e `e2e-test-writer`
+(`tests/e2e`). O `implement-feature` as aciona por feature. Nenhuma skill cobre `apps/ia/__tests__/integration` nem os
+testes de contrato: o `implement-feature` os escreve pelo fallback.
+
+## Gates de integração: `tests-integration-backend` e `tests-integration-ia`
+
+Rodam fora dos containers, com `NODE_ENV=testing`, contra os schemas de teste (`web_test`, `gateway_test`) e os bancos
+de teste do Redis, configurados no `apps/<app>/.env.testing` de cada app.
+
+- **Partes, cada uma só quando a pasta dela existe:**
+  - `__tests__/integration` → `npm run test:integration`, que aplica as migrations de teste antes;
+  - `__tests__/contracts` → `npm run test:contracts`, **só no `ia`**: a verificação do provedor contra os pacts do
+    backend.
+
+  Sem nenhuma das duas, o gate é no-op.
+- **Quando roda:** o `tests-integration-backend` roda quando muda algo em `apps/backend/`. O `tests-integration-ia` roda
+  quando muda algo em `apps/ia/`; mudança só em `contracts/**` roda apenas a parte de contratos.
+- **Pasta sem o script npm:** se a pasta existe e o script não, o gate falha nomeando o script.
+- **Os scripts não usam `--passWithNoTests`:** uma pasta que existe sem testes faz o gate falhar.
+- **Precisa do MySQL e do Redis.** Antes de rodar, o gate abre uma conexão TCP com os hosts do `.env.testing`. Se o
+  arquivo não existe, falha com o comando de cópia do modelo. Se um serviço não responde, falha com
+  `not reachable: MySQL (127.0.0.1:3306)` e a instrução `./dev.sh --infra`.
+- **`INTEGRATION_SKIP=1`** pula o gate com um banner de "não verificado", e o resumo marca `SKIPPED`.
+
+### Estado: ainda não provados
+
+Os dois gates foram criados em 2026-10-03, antes da implementação da F01. Até ali não existiam testes de integração, o
+`./dev.sh` nem a infraestrutura. O que foi provado com arquivos temporários:
+- no-op sem as pastas;
+- falha com pasta sem script;
+- falha sem `.env.testing`;
+- falha com MySQL fora do ar;
+- `SKIPPED` com `INTEGRATION_SKIP=1`;
+- disparo da parte de contratos por `contracts/**`.
+
+**Falta a prova falha → passa contra o banco real.** Ela é feita por uma rodada curta da `gate-builder` depois da
+implementação da F01, e a data é registrada aqui.
+
+## Conferência dos contratos (`tests-backend`)
+
+O backend é o consumidor dos contratos com o proxy (Pact). Os pacts versionados ficam em `contracts/pacts/`.
+
+- **Quando roda:** se mudou algo em `apps/backend/` ou em `contracts/pacts/**`, e existe `apps/backend/__tests__/contracts`.
+- **O que faz:** o gate roda o `npm run test:contracts` do backend **inteiro**, com `PACT_DIR` numa pasta temporária.
+  Depois compara o resultado com os pacts versionados do consumidor `ai-gateway-backend`
+  ([scripts/gates/contracts.mjs](scripts/gates/contracts.mjs)).
+  - **Comparação semântica:** interações indexadas pela descrição, comparando `request`, `response` e os provider
+    states. A ordem e os metadados são ignorados.
+  - **Falha** se faltar ou sobrar um arquivo, se uma interação mudar, aparecer ou sumir, ou se houver descrição
+    duplicada, e diz como regenerar.
+- **O gate nunca escreve em `contracts/`.** Regenerar é `cd apps/backend && npm run test:contracts`, e o pact entra no
+  commit.
+- **Autoteste antes do veredito:** a comparação tem um autoteste
+  ([scripts/__tests__/pact-compare.test.mjs](scripts/__tests__/pact-compare.test.mjs)), que roda antes da conferência.
+- **Pact sem consumidor:** se `contracts/pacts/` tem pacts do backend e o backend não tem `__tests__/contracts`, o gate
+  falha.
+
+A verificação do outro lado, a do provedor, é a parte de contratos do `tests-integration-ia`.
 
 ## `e2e-frontend`
 
@@ -279,11 +341,11 @@ O harness é do gate. Os testes de feature são da `e2e-test-writer`, que nunca 
 | Sementes | `tests/e2e/<perfil>/harness-seed.spec.js`, uma por perfil: provam o harness, não o produto |
 | Fixtures | [tests/e2e/fixtures.js](tests/e2e/fixtures.js) exporta `test` e `expect`, com `adminApi` e `agentApi`: request context na **origem do backend** (`E2E_API_URL`, padrão `http://127.0.0.1:3030`) com o Bearer da sessão. Os caminhos começam com `/v2/…` |
 | URL do app | `E2E_BASE_URL`, padrão `http://127.0.0.1:4200` |
-| Log do servidor | o terminal do `npm start` do frontend e do `npm run dev` do backend. A partir da F01, `docker logs` do container |
+| Log do servidor | `docker compose logs` do container do app (ambiente do `./dev.sh`) |
 | Gate | `npm run gate:e2e-frontend` |
 
-- **Precisa do app no ar.** O gate não sobe o app. Se o frontend ou o backend não responder, falha com as instruções
-  para subir.
+- **Precisa do app no ar.** O gate não sobe o app. Se o frontend ou o backend não responder, falha mandando subir o
+  ambiente com `./dev.sh`.
 - **Roda headless.** Não abre janela. Isso é diferente da execução com navegador visível que um humano acompanha num
   smoke test (`playwright-cli open --headed`).
 - **Escopo:** roda quando mudou algo em `apps/frontend/`, `apps/backend/`, `tests/e2e/` ou no
@@ -316,7 +378,6 @@ integração; um terceiro perfil exigiria adaptar as regras da `e2e-test-writer`
 
 | Gate ou peça | Quando | Por quê |
 |---|---|---|
-| `tests-integration-backend` | F01 | precisa do MySQL de teste (`web_test`), das migrations e de `__tests__/utils/test-setup` |
 | `visual-frontend` | F04 | precisa de telas e do tema. Começa pelos defeitos que aparecerem, não por uma lista de desejos |
 | Checagens estruturais do `styles-frontend` (densidade de diálogo, listagem com o filtro lateral) | quando os componentes de página existirem | não há o que medir ainda |
 | Lint, typecheck e deadcode do `examples/` | F11 | a pasta ainda não existe |
@@ -361,12 +422,13 @@ Gate verde não significa feature verificada. O que está abaixo continua sendo 
   em outra função ou módulo), e o `no-knex-raw` não sabe o que um helper monta. O `check-architecture` busca texto, linha
   a linha: um `process.env` montado dinamicamente escapa.
 - **Qualidade dos testes.** A cobertura mede linhas executadas, não asserções.
-- **Integração com banco e Redis.** Até a F01 não há `tests-integration-backend`. N+1 em tempo de execução (crescimento
-  do número de consultas) também não é medido.
+- **Integração com banco e Redis, até a prova.** Os gates de integração existem, mas ainda não foram provados contra o
+  banco real (ver acima). N+1 em tempo de execução (crescimento do número de consultas) é medido pelos testes de
+  integração da `integration-test-writer`, não por um gate próprio.
 - **Serviços externos.** O PRD proíbe que um teste chame a OpenAI ou o Google. As demos contra os provedores reais são
   manuais.
 - **A infraestrutura dos próprios gates.** `scripts/`, `tests/e2e/` e as regras em `apps/frontend/tools/` não passam
-  por lint. As regras de acesso a dados e de design system têm autotestes; o runner não.
+  por lint. As regras de acesso a dados e de design system e a comparação de pacts têm autotestes; o runner não.
 - **Segurança e dependências vulneráveis.** Não há gate de `npm audit`, headers ou validação de entrada.
 - **Outros navegadores.** O e2e roda só no Chromium.
 
@@ -389,6 +451,32 @@ Gate verde não significa feature verificada. O que está abaixo continua sendo 
    e ao `ARCH_TS_CONFIG` em [scripts/gates/code.mjs](scripts/gates/code.mjs).
 
 ## Histórico
+
+### 2026-10-03: rodada prévia da F01
+
+A spec da F01 pediu os gates de integração antes da implementação.
+
+- **Criados:** `tests-integration-backend` e `tests-integration-ia`, na cadeia padrão, ainda não provados contra o banco
+  real. A conferência semântica dos pacts entrou no `tests-backend`.
+- **Restrição dos gates de unit:** `tests-backend` e `tests-monorepo` ficaram restritos a `__tests__/unit`.
+  - A primeira versão usou `--testPathPattern`/`--testPathPatterns`. A prova mostrou que o jest combina esse filtro com
+    os caminhos do `--findRelatedTests` num OU: um teste quebrado em `__tests__/integration` rodava no `tests-monorepo`.
+  - A versão final filtra a lista no runner e roda com `--runTestsByPath`.
+- **Cadeia padrão verde** sobre todos os apps, com os dois gates novos em no-op.
+- **Autoteste da comparação de pacts:** 5 casos.
+- **12 provas com arquivos temporários**, todas restauradas:
+  - pasta de integração sem script → FAIL;
+  - sem `.env.testing` → FAIL;
+  - MySQL fora do ar → FAIL com `./dev.sh --infra`;
+  - `INTEGRATION_SKIP=1` → SKIPPED;
+  - `contracts/**` disparando a parte de contratos do `ia` → FAIL por falta de script;
+  - pact do backend versionado sem testes consumidores → FAIL;
+  - teste quebrado em `__tests__/integration` ignorado pelo `tests-monorepo` e pelo `tests-backend` → PASS;
+  - teste quebrado em `__tests__/unit` → FAIL;
+  - mudança no `jest.config.js` do `ia` rodando só a suíte de unit → PASS;
+  - cobertura de 44% → FAIL;
+  - spec quebrado no frontend, que não tem o filtro → FAIL.
+- **`e2e-frontend`:** a mensagem de app fora do ar passou a mandar para o `./dev.sh`.
 
 ### 2026-10-03: apps independentes
 

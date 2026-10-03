@@ -3,15 +3,19 @@ import {
   buildAngular,
   buildWithNpm,
   buildWithTsc,
+  combine,
   deadcode,
   forApps,
   lint,
   NOOP,
+  SKIPPED,
   tests,
   typecheck
 } from './gates/code.mjs'
+import { backendContractsGate } from './gates/contracts.mjs'
 import { dataAccessGate } from './gates/data-access.mjs'
-import { e2eGate, SKIPPED } from './gates/e2e.mjs'
+import { e2eGate } from './gates/e2e.mjs'
+import { integrationGate } from './gates/integration.mjs'
 import {
   APPS,
   appScope,
@@ -104,18 +108,36 @@ const GATES = [
   },
   {
     id: 'tests-backend',
-    label: 'Backend unit tests, coverage >= 80% on changed sources',
-    run: scope => forApps(scope, [BACKEND], tests)
+    label:
+      'Backend unit tests (coverage >= 80% on changed sources) and consumer pacts',
+    run: async scope =>
+      combine([
+        await forApps(scope, [BACKEND], target =>
+          tests(target, { unitOnly: true })
+        ),
+        backendContractsGate(scope)
+      ])
   },
   {
     id: 'tests-frontend',
     label: 'Frontend unit tests, coverage >= 80% on changed sources',
-    run: scope => forApps(scope, [FRONTEND], tests)
+    run: scope => forApps(scope, [FRONTEND], target => tests(target))
   },
   {
     id: 'tests-monorepo',
     label: 'ia and ia_simulator unit tests, coverage >= 80% on changed sources',
-    run: scope => forApps(scope, MONOREPO_APPS, tests)
+    run: scope =>
+      forApps(scope, MONOREPO_APPS, target => tests(target, { unitOnly: true }))
+  },
+  {
+    id: 'tests-integration-backend',
+    label: 'Backend integration tests against MySQL and Redis (web_test)',
+    run: scope => integrationGate(scope, BACKEND)
+  },
+  {
+    id: 'tests-integration-ia',
+    label: 'ia integration and provider contract tests (gateway_test)',
+    run: scope => integrationGate(scope, 'ia', { triggers: ['contracts/'] })
   },
   {
     id: 'deadcode',

@@ -16,8 +16,10 @@ import {
 import { appScope, ROOT } from './scope.mjs'
 
 export const NOOP = 'noop'
+export const SKIPPED = 'skipped'
 
 const SCRIPT_FILE = /\.[cm]?[jt]s$/
+const UNIT_TEST = /[\\/]__tests__[\\/]unit[\\/]/
 const COMPONENT_ASSET = /\.component\.(html|css)$/
 
 const ARCH_TS_CONFIG = {
@@ -103,11 +105,38 @@ function relatedFiles(target) {
   )
 }
 
-export function tests(target) {
+function listTests(jest, target, args) {
+  const listed = captureNode(jest, ['--listTests', ...args], target.dir)
+  if (!listed.ok) {
+    process.stderr.write(listed.stderr)
+    return null
+  }
+  return listed.stdout
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+}
+
+export function tests(target, { unitOnly = false } = {}) {
   const jest = binPath(target.dir, 'jest')
+  const select = files =>
+    unitOnly ? files.filter(file => UNIT_TEST.test(file)) : files
   if (target.configChanged) {
     note(`${target.app}: test configuration changed, running the whole suite`)
-    return runNode(jest, ['--ci', '--coverage'], target.dir)
+    const all = listTests(jest, target, [])
+    if (all === null) {
+      return false
+    }
+    const suite = select(all)
+    if (suite.length === 0) {
+      note(`${target.app}: no unit tests`)
+      return NOOP
+    }
+    return runNode(
+      jest,
+      ['--ci', '--coverage', '--runTestsByPath', ...suite],
+      target.dir
+    )
   }
   const related = relatedFiles(target)
   if (related.length === 0) {
@@ -120,19 +149,11 @@ export function tests(target) {
   const coverable = related.filter(
     coverageMatcher(config.collectCoverageFrom ?? [])
   )
-  const listed = captureNode(
-    jest,
-    ['--listTests', '--findRelatedTests', ...related],
-    target.dir
-  )
-  if (!listed.ok) {
-    process.stderr.write(listed.stderr)
+  const listed = listTests(jest, target, ['--findRelatedTests', ...related])
+  if (listed === null) {
     return false
   }
-  const testFiles = listed.stdout
-    .split('\n')
-    .map(line => line.trim())
-    .filter(Boolean)
+  const testFiles = select(listed)
   if (testFiles.length === 0) {
     if (coverable.length > 0) {
       console.error(
@@ -145,7 +166,7 @@ export function tests(target) {
     note(`${target.app}: no tests related to the changed files`)
     return NOOP
   }
-  const args = ['--ci', '--findRelatedTests', ...related]
+  const args = ['--ci', '--runTestsByPath', ...testFiles]
   if (coverable.length > 0) {
     args.push(
       '--coverage',
