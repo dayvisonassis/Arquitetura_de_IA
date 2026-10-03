@@ -19,6 +19,9 @@ fonte da verdade das regras de produto.
 - **A raiz só tem as ferramentas comuns** (Husky, lint-staged, Prettier, Playwright) e scripts no formato
   `cd apps/<app> && ...`.
 - **Node 22.13.0**, fixado no `.nvmrc`.
+- O `apps/frontend` tem um `.npmrc` com `legacy-peer-deps=true`: o `@angular-devkit/build-angular` 19 ainda declara
+  o jest 29 como peer, e os testes rodam no jest 30. Copie o `.npmrc` junto com o `package.json` em qualquer
+  Dockerfile ou pipeline que rode `npm ci` no frontend.
 
 ## Comentários no código
 
