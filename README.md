@@ -175,6 +175,87 @@ curl -s -H "Authorization: Bearer $KEY" -H 'content-type: application/json' \
 - **Acentos no Windows:** o `curl` envia o argumento `-d` na página de código ANSI, então um motivo com acento chega
   corrompido. Escreva sem acento, ou mande o corpo de um arquivo UTF-8 com `--data-binary @corpo.json`.
 
+## Destino simulado
+
+O [apps/ia_simulator](apps/ia_simulator) imita um provedor compatível com a OpenAI, para testar o gateway sem chamar a
+OpenAI nem o Google. Detalhes na [spec da F03](docs/F03-destino-de-ia-simulado/spec.md) (§5).
+
+- **Onde roda:** só na rede interna do compose, em `http://ia_simulator:3132`. Nenhuma porta é publicada no host.
+- **Uso:** só nos testes e no ambiente local. Nunca recebe dados reais.
+- **Credencial:** o header `Authorization` não é lido, então qualquer Bearer serve, e nenhum também.
+- **Estado:** fica em memória. Um reinício do container volta tudo ao padrão.
+
+**`POST /v1/chat/completions`** responde no formato da OpenAI, conforme o modo configurado para o `model` da
+requisição. Um modelo sem modo configurado responde em `ok`.
+- **Uso de tokens determinístico:** `prompt_tokens` = caracteres do `content` das mensagens ÷ 4, arredondado para
+  cima, e `completion_tokens` = caracteres da resposta ÷ 4, também arredondado para cima.
+- **Corte no limite:** a resposta é cortada no `max_completion_tokens` (ou no `max_tokens`), com
+  `finish_reason: length`.
+
+**`POST /control/modes`** configura o modo de um modelo e substitui o anterior:
+
+| `mode` | Comportamento | Campos |
+|---|---|---|
+| `ok` | resposta fixa, padrão `Resposta simulada.` | `content` (opcional) |
+| `error` | o status configurado, com o corpo de erro da OpenAI | `status` (401, 429, 500, 502 ou 503); `retry_after_seconds` (0 a 120, só no 429 e no 503), que vira o header `Retry-After` |
+| `slow` | espera e responde como `ok` | `delay_ms` (0 a 120.000); `content` (opcional) |
+| `timeout` | nunca responde; a conexão fica aberta até o cliente desistir | — |
+| `fenced-json` | JSON válido entre crases, com a marcação `json`; padrão: a resposta da demo D7 | `content` (opcional, JSON) |
+| `invalid-json` | texto que não é JSON | `content` (opcional, não JSON) |
+
+Todos os modos aceitam `model` (obrigatório) e `times` (1 a 1.000): o modo vale para as próximas N chamadas, e depois
+o modelo volta a `ok`.
+
+**Outros endpoints de controle:**
+- `GET /control/modes` lista os modos guardados.
+- `GET /control/stats` devolve, por modelo, a contagem de chamadas e as 20 mais recentes, com o horário, o modo
+  aplicado e o corpo recebido (sem headers).
+- `POST /control/reset` apaga os modos e as estatísticas.
+
+**Chamar o simulador no `./dev.sh`:** o host não alcança o simulador, então a chamada parte de dentro da rede, pelo
+container do proxy. Escreva um script ESM, por exemplo `sim.mjs`:
+
+```js
+const SIM = 'http://ia_simulator:3132'
+const post = (path, body) =>
+  fetch(SIM + path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+
+await post('/control/modes', { model: 'gpt-4.1-mini', mode: 'error', status: 503, times: 2 })
+const response = await post('/v1/chat/completions', {
+  model: 'gpt-4.1-mini',
+  messages: [{ role: 'user', content: 'Oi' }]
+})
+console.log(response.status, await response.text())
+console.log(await (await fetch(SIM + '/control/stats')).text())
+```
+
+Depois, envie o script pelo stdin, da raiz:
+
+```bash
+docker compose -p ai-gateway-app exec -T ia node --input-type=module - < sim.mjs
+```
+
+**Catálogo simulado:** o [apps/ia/catalog/catalog.simulated.json](apps/ia/catalog/catalog.simulated.json) é o catálogo
+real com `provider: simulated` em cada deployment e sem `credential_env`. Os nomes de capacidade e de deployment, os
+modelos, os parâmetros e os preços são os mesmos.
+- O proxy o carrega com `CATALOG_FILE=catalog/catalog.simulated.json`. Ele passa a ser útil quando o `/v1` existir
+  (F08).
+- **Mantenha os dois arquivos espelhados:** uma mudança no catálogo real entra no simulado no mesmo commit. O teste
+  `apps/ia/__tests__/integration/catalog-simulated.test.ts` falha se eles divergirem.
+
+**Instância no host, para testes:** os testes de integração do simulador o sobem como processo filho, em `127.0.0.1` e
+numa porta livre, e não precisam do `./dev.sh --infra`:
+
+```bash
+cd apps/ia_simulator && npm run test:integration
+```
+
+Para subir uma instância à mão: `cd apps/ia_simulator && PORT=3140 npm run start:testing`. Sem `PORT`, ela usa a 3132.
+
 ## Testes e lint
 
 Da raiz:
@@ -195,6 +276,9 @@ arquivos em staged; as convenções estão no [CLAUDE.md](CLAUDE.md).
 cd apps/backend && npm run test:integration    # aplica as migrations de teste e roda __tests__/integration
 cd apps/ia && npm run test:integration
 ```
+
+Os do simulador (`cd apps/ia_simulator && npm run test:integration`) não precisam de nenhuma infraestrutura: eles sobem
+o próprio simulador.
 
 **Testes de contrato** (Pact) entre o backend e o proxy: veja [contracts/README.md](contracts/README.md).
 

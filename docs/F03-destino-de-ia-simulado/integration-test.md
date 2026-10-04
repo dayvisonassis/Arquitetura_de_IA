@@ -22,3 +22,16 @@ Cada teste começa com `POST /control/reset` (204).
 - [x] `fenced-json`: o conteúdo começa com a cerca `json` e termina com a de fechamento, e o miolo é a resposta da D7
       (critério 4)
 - [x] `error` 429 com `retry_after_seconds: 2` e `times: 1`: 429 com `Retry-After: 2`, e a chamada seguinte recebe 200
+
+## `apps/ia/__tests__/integration/`
+
+Roda no gate `tests-integration-ia`, junto com a suíte de integração do proxy (precisa do `./dev.sh --infra`). Fica na
+integração porque uma mudança só num JSON de catálogo não dispara o `tests-monorepo`.
+
+### `catalog-simulated.test.ts` → `catalog/catalog.simulated.json`
+- [x] o catálogo simulado passa no `assertCatalog` sem `OPENAI_API_KEY` e sem `GEMINI_API_KEY`; o real, com o mesmo
+      ambiente, é recusado citando a credencial (prova que o ambiente do teste não tem as chaves)
+- [x] espelho do real: todo deployment simulado tem `provider: simulated` e não tem `credential_env`; sem esses dois
+      campos, os deployments são iguais e na mesma ordem; as capacidades são iguais. Provado também ao contrário: um
+      preço mudado só no simulado faz o teste falhar
+- [x] nenhum modelo repetido entre os deployments simulados (os modos do simulador são por modelo)
