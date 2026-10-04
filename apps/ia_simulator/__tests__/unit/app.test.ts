@@ -1,11 +1,12 @@
 jest.mock('../../src/logger', () => ({
   __esModule: true,
-  default: { error: jest.fn() }
+  default: { info: jest.fn(), error: jest.fn() }
 }))
 
 import request from 'supertest'
 import app from '../../src/app'
 import logger from '../../src/logger'
+import { reset } from '../../src/services/simulation-state.service'
 
 const TWO_MB = 2 * 1024 * 1024
 
@@ -25,6 +26,7 @@ const postJson = (body: string) =>
 describe('app', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    reset()
   })
 
   it('should answer GET /health/live with status ok', async () => {
@@ -99,6 +101,45 @@ describe('app', () => {
     expect(response.status).toBe(404)
     expect(response.body.error.code).toBe('not_found')
   })
+
+  it('should mount the completions and control routes', async () => {
+    const completion = await request(app)
+      .post('/v1/chat/completions')
+      .send({ model: 'm', messages: [{ role: 'user', content: 'Oi' }] })
+    const modes = await request(app)
+      .post('/control/modes')
+      .send({ model: 'm', mode: 'ok' })
+    const listed = await request(app).get('/control/modes')
+    const stats = await request(app).get('/control/stats')
+    const cleared = await request(app).post('/control/reset')
+
+    expect(completion.status).toBe(200)
+    expect(completion.body.object).toBe('chat.completion')
+    expect(completion.headers['x-powered-by']).toBeUndefined()
+    expect(modes.status).toBe(200)
+    expect(listed.status).toBe(200)
+    expect(listed.body.modes.m.mode).toBe('ok')
+    expect(stats.status).toBe(200)
+    expect(stats.body.models.m.calls).toBe(1)
+    expect(cleared.status).toBe(204)
+  })
+
+  it.each<['get' | 'post' | 'delete', string]>([
+    ['get', '/v1/chat/completions'],
+    ['post', '/v1/completions'],
+    ['post', '/chat/completions'],
+    ['delete', '/control/modes'],
+    ['get', '/control/reset'],
+    ['post', '/control/stats']
+  ])(
+    'should answer %s %s with 404, since only the spec routes exist',
+    async (method, path) => {
+      const response = await request(app)[method](path)
+
+      expect(response.status).toBe(404)
+      expect(response.body.error.code).toBe('not_found')
+    }
+  )
 
   it('should answer invalid JSON, a large body and an unknown route in the OpenAI format', async () => {
     const responses = await Promise.all([
