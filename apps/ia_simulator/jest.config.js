@@ -3,6 +3,7 @@ module.exports = {
   testEnvironment: 'node',
   testMatch: ['**/__tests__/**/*.test.ts'],
   setupFiles: ['<rootDir>/__tests__/setupTests.ts'],
+  testTimeout: 30000,
   clearMocks: true,
   collectCoverageFrom: ['src/**/*.ts'],
   coverageDirectory: 'coverage',

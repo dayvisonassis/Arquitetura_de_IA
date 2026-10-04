@@ -14,8 +14,11 @@
     "format": "prettier --write --config ./.prettierrc \"**/*.{ts,js}\"",
     "format:check": "prettier --check --config ./.prettierrc \"**/*.{ts,js}\"",
     "check": "npm run lint:check && npm run format:check",
-    "test": "jest",
-    "test:coverage": "jest --coverage"
+    "test": "jest __tests__/unit/",
+    "test:coverage": "jest __tests__/unit/ --coverage",
+    "test:unit": "cross-env NODE_ENV=testing jest __tests__/unit/",
+    "test:integration": "cross-env NODE_ENV=testing jest __tests__/integration/ --runInBand",
+    "start:testing": "cross-env NODE_ENV=testing node -r ts-node/register/transpile-only index.ts"
   },
   "dependencies": {
     "dotenv": "^16.6.1",
@@ -36,6 +39,7 @@
     "prettier": "3.8.3",
     "supertest": "^7.3.1",
     "ts-jest": "^29.4.14",
+    "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "~5.6.3"
   }
