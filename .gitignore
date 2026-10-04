@@ -3,6 +3,7 @@ dist/
 coverage/
 .env
 .env.infra
+.env.e2e
 *.log
 test-results/
 playwright-report/

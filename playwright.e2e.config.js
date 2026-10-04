@@ -1,5 +1,5 @@
 const { defineConfig, devices } = require('@playwright/test')
-const { BASE_URL, storageStatePath } = require('./tests/e2e/sessions')
+const { BASE_URL, PROFILES, storageStatePath } = require('./tests/e2e/sessions')
 
 const profile = name => ({
   name,
@@ -21,5 +21,5 @@ module.exports = defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure'
   },
-  projects: [profile('admin'), profile('user')]
+  projects: PROFILES.map(profile)
 })

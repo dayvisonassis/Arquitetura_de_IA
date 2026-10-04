@@ -19,6 +19,7 @@ function apiFixture(profile) {
 }
 
 const test = base.test.extend({
+  platformAdminApi: apiFixture('platform_admin'),
   adminApi: apiFixture('admin'),
   userApi: apiFixture('user')
 })

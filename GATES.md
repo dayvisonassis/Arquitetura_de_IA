@@ -62,12 +62,15 @@ Os gates checam **o que a sua mudança alterou**.
 | `tests-integration-ia` | `npm run test:integration` e `npm run test:contracts` (verificação do provedor) | `ia` com `__tests__/integration`/`__tests__/contracts`, ou mudança em `contracts/**`; provado em 2026-10-03 |
 | `tests-integration-ia_simulator` | `npm run test:integration` (o processo real do simulador, sem MySQL nem Redis) | `ia_simulator` com `__tests__/integration`; provado em 2026-10-04 |
 | `deadcode` | `knip --directory apps/<app>` | apps alterados |
+| `visual-frontend` | `playwright test --config playwright.visual.config.js` | **optIn**, ainda não provado verde (ver abaixo) |
 | `e2e-frontend` | `playwright test --config playwright.e2e.config.js` | **optIn**, ainda não provado verde (ver abaixo) |
 
 Ordem da cadeia padrão: `typecheck-frontend → typecheck-monorepo → lint-backend → raw-sql-backend →
 query-loop-backend → lint-frontend → lint-monorepo → styles-frontend → build-backend → build-monorepo → arch →
 tests-backend → tests-frontend → tests-monorepo → tests-integration-backend → tests-integration-ia →
 tests-integration-ia_simulator → deadcode`.
+
+Os gates optIn de navegador, quando chamados, vêm depois dessa cadeia, nesta ordem: `visual-frontend → e2e-frontend`.
 
 "Monorepo" aqui são os apps em TypeScript que não são o frontend: `ia` e `ia_simulator`. Um app novo entra em
 `MONOREPO_APPS` (ou na constante equivalente) em [scripts/gates/scope.mjs](scripts/gates/scope.mjs).
@@ -362,11 +365,12 @@ origem da API, log, gate e política de dados).
 | Peça | Onde |
 |---|---|
 | Config do runner | [playwright.e2e.config.js](playwright.e2e.config.js) (CommonJS), `testDir: './tests/e2e'`, 1 worker, sem retry, headless, screenshot e trace em falha (`test-results/e2e/`) |
-| Perfis | um projeto por sessão: `tests/e2e/admin/**` roda como `domain_admin`, `tests/e2e/user/**` como `user`. As duas contas ficam **no mesmo domínio**. O perfil `platform_admin` entra com a F04 (abaixo) |
-| Sessão | [tests/e2e/global-setup.js](tests/e2e/global-setup.js) guarda a sessão em `tests/e2e/.auth/<perfil>.json` (ignorado pelo Git) e **a reaproveita entre execuções** enquanto o JWT não expira (margem de 5 min) |
-| Sementes | `tests/e2e/<perfil>/harness-seed.spec.js`, uma por perfil: provam o harness, não o produto |
+| Perfis | um projeto por sessão: `tests/e2e/platform_admin/**` roda como `platform_admin`, `tests/e2e/admin/**` como `domain_admin` e `tests/e2e/user/**` como `user`. As contas do `admin` e do `user` ficam **no mesmo domínio** |
+| Sessão | [tests/e2e/global-setup.js](tests/e2e/global-setup.js) loga cada perfil **uma vez**, por `POST /v2/auth/login`, e grava `currentUser = { token, expires_at }` no `localStorage` do storage state, em `tests/e2e/.auth/<perfil>.json` (ignorado pelo Git). Na execução seguinte, **reaproveita a sessão guardada** se o JWT ainda vale (margem de 5 min) **e** o `GET /v2/me` dela responde 200. Uma sessão revogada (banco recriado, logout) faz o setup logar de novo. Um login recusado vira um erro com o status, a mensagem e a dica, sem nova tentativa |
+| Credenciais | `E2E_PLATFORM_ADMIN_LOGIN`/`_PASSWORD`, `E2E_ADMIN_LOGIN`/`_PASSWORD` e `E2E_USER_LOGIN`/`_PASSWORD`, lidas do `.env.e2e` da raiz (fora do Git; modelo em [config/.env.e2e.example](config/.env.e2e.example), com os e-mails do seed da F04). Uma variável já definida no ambiente vale mais que o arquivo |
+| Sementes | `tests/e2e/<perfil>/harness-seed.spec.js`, uma por perfil: provam o harness, não o produto. Cada uma confere o papel pelo `/v2/me`, abre `/` e espera o destino do papel com o botão "Sair". A do `user` também confere, pelo `/v2/me` do `admin`, que as duas contas estão no mesmo domínio |
 | Linguagem dos testes | JavaScript CommonJS, `.spec.js`: `const { test, expect } = require('../fixtures')` |
-| Fixtures | [tests/e2e/fixtures.js](tests/e2e/fixtures.js) exporta `test` e `expect`, com `adminApi` e `userApi`: request context na **origem do backend** (`E2E_API_URL`, padrão `http://127.0.0.1:3030`) com o Bearer da sessão. Os caminhos começam com `/v2/…` |
+| Fixtures | [tests/e2e/fixtures.js](tests/e2e/fixtures.js) exporta `test` e `expect`, com `platformAdminApi`, `adminApi` e `userApi`: request context na **origem do backend** (`E2E_API_URL`, padrão `http://127.0.0.1:3030`) com o Bearer da sessão. Os caminhos começam com `/v2/…` |
 | URL do app | `E2E_BASE_URL`, padrão `http://127.0.0.1:4200` |
 | Log do servidor | `docker compose logs` do container do app (ambiente do `./dev.sh`) |
 | Gate | `npm run gate:e2e-frontend` |
@@ -378,6 +382,14 @@ origem da API, log, gate e política de dados).
 - **Escopo:** roda quando mudou algo em `apps/frontend/`, `apps/backend/`, `tests/e2e/` ou no
   `playwright.e2e.config.js`. Senão, é no-op. `E2E_FORCE=1` roda mesmo assim. `E2E_SKIP=1` pula com um banner de "não
   verificado": é a válvula do gate, sem relação com proteção anti-bot do app.
+- **Configuração anti-bot de não produção:** o limite de login por IP do backend vem do `LOGIN_RATE_LIMIT_MAX` (padrão
+  20 em 15 minutos, a regra do PRD).
+  - Todo acesso local chega ao backend pelo mesmo IP do gateway do Docker, e uma execução do e2e com a sessão vencida
+    gasta 3 logins. Por isso, só o modelo `apps/backend/config/.env.development.example` sobe o teto para **200**, e o
+    `apps/backend/.env.development` local precisa ter o mesmo valor.
+  - O `testing` e a produção ficam no padrão. O 429 na 21ª tentativa é provado no teste de integração do backend, e não
+    no `./dev.sh`.
+  - O harness não contorna mais nada: não forja token nem pula o bloqueio por conta.
 - **Os testes escrevem pelo produto** no banco que o app usa. Quem mantém esse banco limpo é a política de dados abaixo,
   com as regras D1–D7 da `e2e-test-writer`, não o gate.
 - **Nunca logar por teste.** O login tem limite de tentativas (20 por 15 minutos, mais o bloqueio de 5 erros por
@@ -385,19 +397,21 @@ origem da API, log, gate e política de dados).
 
 ### Estado: optIn e ainda não provado verde
 
-O login só existe a partir da F04. Até lá, o global setup falha com a mensagem `No valid stored session … The sign-in
-flow arrives with F04`. Por isso o gate é optIn e **não conta como suíte e2e** para as skills do SDD.
+O login só existe a partir da implementação da F04. Até lá, o global setup falha com `Sign-in of the platform_admin
+profile … answered 404 ("Rota não encontrada."). The sign-in endpoint arrives with F04.` Por isso o gate é optIn e **não
+conta como suíte e2e** para as skills do SDD.
 
-A F04 completa o harness (é trabalho de gate, feito pela `gate-builder`):
-1. o perfil `platform_admin` (projeto, semente e fixture de API `platformAdminApi`), ao lado de `admin` e `user`;
-2. o login no global setup, pela API, com as contas de `E2E_PLATFORM_ADMIN_LOGIN`/`E2E_PLATFORM_ADMIN_PASSWORD`,
-   `E2E_ADMIN_LOGIN`/`E2E_ADMIN_PASSWORD` e `E2E_USER_LOGIN`/`E2E_USER_PASSWORD`, gravando o `currentUser` no
-   `localStorage` do storage state;
-3. a configuração anti-bot de não produção, se a F04 tiver uma, documentada aqui;
-4. as sementes conferindo o marcador da tela autenticada, e a do `user` conferindo pela `adminApi` que as contas de
-   `admin` e `user` estão no mesmo domínio;
-5. a prova falha → passa (quebrar uma semente de propósito), o registro da data aqui e a entrada do gate na cadeia
-   padrão.
+A rodada prévia da F04 (2026-10-04, ver Histórico) completou o harness:
+1. o perfil `platform_admin` (projeto, semente e fixture `platformAdminApi`), ao lado de `admin` e `user`;
+2. o login no global setup, pela API, com as credenciais do `.env.e2e`, gravando `{ token, expires_at }` no
+   `currentUser`, e o reaproveitamento da sessão só com o `/v2/me` respondendo 200;
+3. a configuração anti-bot de não produção (`LOGIN_RATE_LIMIT_MAX`, acima);
+4. as sementes conferindo o destino do papel e o botão "Sair", e a do `user` conferindo que as contas de `admin` e
+   `user` estão no mesmo domínio.
+
+**Falta, na rodada posterior da F04** (depois do `implement-feature`): a prova falha → passa (quebrar uma semente de
+propósito), o registro da data aqui e a entrada do gate na cadeia padrão. Só então a `e2e-test-writer` escreve os
+testes das linhas `e2e` do contrato da F04.
 
 **Perfis (decididos em 2026-10-03, revistos em 2026-10-04):**
 
@@ -410,9 +424,10 @@ A F04 completa o harness (é trabalho de gate, feito pela `gate-builder`):
 - O nome do perfil é o do papel no PRD, menos no `admin`, que é o `domain_admin`. A pasta é `tests/e2e/<perfil>/`.
 - As três contas usam a mesma senha, que fica só nos arquivos de ambiente locais. O banco de desenvolvimento começa
   vazio e é só de teste.
-- O domínio e as contas do `admin` e do `user` vêm de um seed de desenvolvimento, a definir na spec da F04. O seed vale
-  até a F07, que cria pela plataforma o domínio, a cópia dele no backend (usada pelo login) e o primeiro `admin`, e
-  até a F09, que cria o `user`. A API de domínios da F05 é do proxy, com a master key, e não atualiza a cópia do
+- O `platform_admin` é o primeiro administrador, criado pelo backend na partida (`PLATFORM_ADMIN_EMAIL`). O domínio e as
+  contas do `admin` e do `user` vêm do seed de desenvolvimento da F04 (`apps/backend/data/seeds/dev_accounts.js`,
+  aplicado pelo `./dev.sh`; spec da F04, §6). O seed vale até a F07, que cria pela plataforma o domínio, a cópia dele no
+  backend (usada pelo login) e o primeiro `admin`, e até a F09, que cria o `user`. A API de domínios da F05 é do proxy, com a master key, e não atualiza a cópia do
   backend. Depois da F07/F09, o harness pode criar o domínio e as contas pela `platformAdminApi`.
 - O isolamento entre domínios (PRD §4: cada tela com um administrador de outro domínio) não ganha um quarto perfil: ele
   é provado na API, pelos testes de integração do backend, e nas telas, à mão.
@@ -420,8 +435,18 @@ A F04 completa o harness (é trabalho de gate, feito pela `gate-builder`):
   variantes e2e com prefixo de outro projeto, que o repositório das skills também tem, ficam fora desta instalação.
 
 **Política de dados:**
-- **Registros protegidos:** nenhum declarado ainda, então vale o padrão: todo registro que o teste não criou é protegido
-  (D1). As três contas do harness e o domínio do seed nunca são editados nem removidos por um teste.
+- **Registros protegidos:** todo registro que o teste não criou (D1). Em especial, nunca são editados nem removidos por
+  um teste:
+  - as três contas do harness;
+  - os dois domínios do seed da F04 ("Domínio de teste" e "Domínio inativo de teste");
+  - a conta `inativo@temporario.com`, do domínio inativo.
+- **Login e logout (F04):** nenhum teste envia o formulário de login nem chama o logout com a sessão guardada:
+  - um login conta para o limite do IP e, com a senha errada, para o bloqueio da conta (5 erros seguidos bloqueiam por
+    15 minutos);
+  - o logout revoga a sessão que os outros testes usam.
+
+  Esses fluxos ficam com a integração do backend e com a verificação `runtime-only` (regras A1 e A2 da
+  `e2e-test-writer`).
 - **Configuração que os testes só leem:** o catálogo de capacidades do proxy e o estado dele (suspensões e cooldown): mudar
   esse estado afeta as outras telas e testes. Um fluxo que precise suspender um recurso do catálogo é
   `not e2e-testable — shared configuration`, até a feature dele declarar aqui como fazê-lo e desfazê-lo.
@@ -429,11 +454,48 @@ A F04 completa o harness (é trabalho de gate, feito pela `gate-builder`):
   de remoção, o perfil que pode usá-las e se a remoção é lógica (o registro fica, fora das listagens). Sem rota de
   remoção declarada, o teste não cria (D5).
 
+## `visual-frontend`
+
+Mede **valores renderizados** num navegador: alturas, tamanho efetivo de fonte, contraste e tema. Pega o que nenhum
+lint vê, como um `!important` global que anula a regra de um componente ou um campo que renderiza na altura padrão do
+Material. Os specs do Jest rodam no jsdom, sem layout, e não medem nada disso.
+
+| Peça | Onde |
+|---|---|
+| Config do runner | [playwright.visual.config.js](playwright.visual.config.js) (CommonJS), `testDir: './tests/visual'`, separada da do e2e (um runner coleta tudo sob o próprio diretório), 1 worker, sem retry, headless, viewport 1440 × 900, falhas em `test-results/visual/` |
+| Projetos | `public` (sem sessão, para o login) e `admin` (a sessão guardada do perfil `admin` do e2e, para o shell). A pasta é `tests/visual/<projeto>/` |
+| Sessões | o mesmo global setup e os mesmos arquivos de `tests/e2e/.auth/` do e2e: os dois gates nunca logam duas vezes pela mesma conta |
+| Sementes | `tests/visual/public/visual-seed.spec.js` (o campo de e-mail do login com 38 px no `.mat-mdc-text-field-wrapper`) e `tests/visual/admin/visual-seed.spec.js` (o `h1` do page shell com 17 px e peso 600) |
+| Gate | `npm run gate:visual-frontend` |
+
+- **Precisa do app no ar.** Se o frontend ou o backend não responder, falha mandando subir o `./dev.sh`.
+- **Roda headless.** É diferente da execução com o navegador visível que um humano acompanha num smoke test.
+- **Escopo:** roda quando mudou algo em `apps/frontend/`, `tests/visual/`, no `playwright.visual.config.js` ou no harness
+  de sessão compartilhado (`tests/e2e/sessions.js`, `tests/e2e/global-setup.js`). Senão, é no-op.
+  - `VISUAL_FORCE=1` roda mesmo assim;
+  - `VISUAL_SKIP=1` pula com um banner do que não foi medido.
+- **Cresce uma asserção por defeito.** As asserções medem o valor computado (`getComputedStyle`,
+  `getBoundingClientRect`), nunca a presença de uma classe. O tamanho que conta é o efetivo (`font-size` × escala).
+- **Os testes deste gate são do gate.** Diferente do e2e, as medições ficam aqui e são escritas pela `gate-builder` (ou
+  por uma correção que acrescenta a medição do defeito encontrado), com nomes em inglês e tag `@harness` nas sementes.
+
+### Estado: optIn e ainda não provado verde
+
+Montado na rodada prévia da F04 (2026-10-04), antes de existir tela. Na **rodada posterior da F04**, depois do
+`implement-feature`, entram:
+- as medições do contrato da F04, sobre o DOM implementado:
+  - cabeçalho com 46 px, item do menu com 32 px e botões com 32 px;
+  - Open Sans no `body` e o título do login com 15 px/600;
+  - no tema escuro: a superfície da página e do card diferente da do claro, o texto com contraste ≥ 4,5:1 e o item
+    ativo do menu com o `primary-container`;
+  - a troca de tema persistida;
+- a prova falha → passa, a data aqui e a entrada na cadeia padrão.
+
 ## Ainda não construído
 
 | Gate ou peça | Quando | Por quê |
 |---|---|---|
-| `visual-frontend` | F04 | precisa de telas e do tema. Começa pelos defeitos que aparecerem, não por uma lista de desejos |
+| Medições do contrato da F04 no `visual-frontend` | rodada posterior da F04 | precisam do DOM implementado (ver a seção do gate) |
 | Checagens estruturais do `styles-frontend` (densidade de diálogo, listagem com o filtro lateral) | quando os componentes de página existirem | não há o que medir ainda |
 | Lint, typecheck e deadcode do `examples/` | F11 | a pasta ainda não existe |
 
@@ -463,14 +525,18 @@ A F04 completa o harness (é trabalho de gate, feito pela `gate-builder`):
 
 Gate verde não significa feature verificada. O que está abaixo continua sendo responsabilidade de quem valida:
 
-- **Comportamento interativo.** O `e2e-frontend` ainda não roda (login na F04) e, quando rodar, só vai dirigir os
-  fluxos que tiverem teste. Nenhum gate aciona um filtro, um select, um toggle ou a paginação. Cada controle precisa
-  ser exercitado individualmente numa execução com navegador visível, e **um resultado vazio nunca valida um filtro**:
-  filtrar por um valor que não existe retorna zero linhas, funcionando ou não. Use um valor presente nos dados.
-- **Conformidade visual medida.** Não há `visual-frontend`. Cor, contraste, espaçamento e densidade só são provados
-  lendo valores computados num navegador, nunca pela presença de uma classe: um `!important` global pode anular a
-  regra de um componente. O `styles-frontend` checa só o texto do CSS e dos templates. **Smoke de UI sempre no tema
-  escuro primeiro.**
+- **Comportamento interativo.** O `e2e-frontend` ainda não foi provado verde (falta a rodada posterior da F04) e,
+  quando for, só vai dirigir os fluxos que tiverem teste. **Ele nunca dirige o formulário de login, o Sair nem uma
+  sessão vencida ou adulterada** (regras A1 e A2 da `e2e-test-writer`): esses fluxos da F04 são provados pela
+  integração do backend, pelos testes unitários e por uma verificação no navegador. Nenhum gate aciona um filtro, um
+  select, um toggle ou a paginação. Cada controle precisa ser exercitado individualmente numa execução com navegador
+  visível, e **um resultado vazio nunca valida um filtro**: filtrar por um valor que não existe retorna zero linhas,
+  funcionando ou não. Use um valor presente nos dados.
+- **Conformidade visual medida.** O `visual-frontend` ainda não foi provado verde e, até a rodada posterior da F04, só
+  tem as duas sementes (o campo do login e o título do page shell). Tudo o que ele não mede, como cor, contraste,
+  espaçamento e densidade fora dessas duas medidas, só é provado lendo valores computados num navegador, nunca pela
+  presença de uma classe: um `!important` global pode anular a regra de um componente. O `styles-frontend` checa só o
+  texto do CSS e dos templates. **Smoke de UI sempre no tema escuro primeiro.**
 - **Templates, na cadeia padrão.** O `typecheck-frontend` não lê os templates. Só o `build-frontend` (optIn) os
   confere.
 - **O `styles.scss` global e os temas `.scss`.** O stylelint só lê `.css`.
@@ -488,10 +554,11 @@ Gate verde não significa feature verificada. O que está abaixo continua sendo 
   ligação entre o proxy e o simulador no compose continuam sendo verificações de runtime.
 - **Serviços externos.** O PRD proíbe que um teste chame a OpenAI ou o Google. As demos contra os provedores reais são
   manuais.
-- **A infraestrutura dos próprios gates.** `scripts/`, `tests/e2e/` e as regras em `apps/frontend/tools/` não passam
-  por lint. As regras de acesso a dados e de design system e a comparação de pacts têm autotestes; o runner não.
+- **A infraestrutura dos próprios gates.** `scripts/`, `tests/e2e/`, `tests/visual/` e as regras em
+  `apps/frontend/tools/` não passam por lint. As regras de acesso a dados e de design system e a comparação de pacts têm
+  autotestes; o runner e o global setup não.
 - **Segurança e dependências vulneráveis.** Não há gate de `npm audit`, headers ou validação de entrada.
-- **Outros navegadores.** O e2e roda só no Chromium.
+- **Outros navegadores.** O e2e e o visual rodam só no Chromium, numa só largura de tela.
 
 ## Adicionar um gate
 
@@ -512,6 +579,27 @@ Gate verde não significa feature verificada. O que está abaixo continua sendo 
    e ao `ARCH_TS_CONFIG` em [scripts/gates/code.mjs](scripts/gates/code.mjs).
 
 ## Histórico
+
+### 2026-10-04: rodada prévia da F04
+
+A spec da F04 pediu o harness e2e completo e o gate visual
+([plano](docs/architecture/gate-plan-f04-2026-10-04.md)).
+
+- **Harness e2e:**
+  - o perfil `platform_admin` (projeto, semente e `platformAdminApi`);
+  - o login pela API no global setup, com as credenciais do `.env.e2e`, e o reaproveitamento da sessão só com o
+    `/v2/me` respondendo 200;
+  - as três sementes conferindo o papel, o destino e o botão "Sair", e a do `user` conferindo o domínio do `admin`.
+- **Gate novo `visual-frontend`** (optIn): config própria, projetos `public` e `admin`, as sessões do e2e e duas
+  sementes. O núcleo dos dois gates de navegador foi para `scripts/gates/browser.mjs`.
+- **Provas, com o `./dev.sh` no ar e antes da implementação da F04:**
+  - escopo só em `apps/ia/package.json` → `PASS (nothing to check)` nos dois gates;
+  - `E2E_SKIP=1` e `VISUAL_SKIP=1` → `SKIPPED`, com o banner do que não foi verificado;
+  - `E2E_BASE_URL` numa porta sem servidor, com `E2E_FORCE=1` → FAIL com `not reachable` e a instrução do `./dev.sh`;
+  - sem o `.env.e2e` → FAIL no global setup, nomeando as variáveis e o modelo;
+  - com o `.env.e2e` → FAIL no global setup com `answered 404 ("Rota não encontrada."). The sign-in endpoint arrives
+    with F04.`, nos dois gates.
+- **Falta (rodada posterior):** as medições do contrato no `visual-frontend` e a prova falha → passa dos dois gates.
 
 ### 2026-10-04: skills e2e genéricas
 

@@ -2,17 +2,23 @@ const { test, expect } = require('../fixtures')
 
 test.describe('harness seed: user profile', () => {
   test(
-    'lands on the app carrying the stored user session',
+    'lands on the playground carrying the stored user session, in the domain of the admin profile',
     { tag: ['@harness'] },
-    async ({ page }) => {
-      const response = await page.goto('/')
+    async ({ page, userApi, adminApi }) => {
+      const userMe = await userApi.get('/v2/me')
+      const adminMe = await adminApi.get('/v2/me')
+      expect(userMe.status()).toBe(200)
+      expect(adminMe.status()).toBe(200)
+      const user = await userMe.json()
+      const admin = await adminMe.json()
+      expect(user.role).toBe('user')
+      // Deletes are domain-scoped: both accounts must share one domain (GATES.md, e2e-frontend)
+      expect(user.domain.id).toBe(admin.domain.id)
 
-      expect(response.ok()).toBe(true)
-      await expect(page.locator('tails-root')).toBeAttached()
-      const token = await page.evaluate(
-        () => JSON.parse(localStorage.getItem('currentUser') || '{}').token
-      )
-      expect(token).toBeTruthy()
+      await page.goto('/')
+
+      await expect(page).toHaveURL(/\/playground$/)
+      await expect(page.getByRole('button', { name: 'Sair' })).toBeVisible()
     }
   )
 })

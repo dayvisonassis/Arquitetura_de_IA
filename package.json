@@ -16,6 +16,7 @@
     "test:ia_simulator": "cd apps/ia_simulator && npm test",
     "test": "npm run test:frontend && npm run test:backend && npm run test:ia && npm run test:ia_simulator",
     "test:e2e": "playwright test --config playwright.e2e.config.js",
+    "test:visual": "playwright test --config playwright.visual.config.js",
     "gate": "node scripts/runGate.mjs",
     "gate:typecheck-frontend": "node scripts/runGate.mjs typecheck-frontend",
     "gate:typecheck-monorepo": "node scripts/runGate.mjs typecheck-monorepo",
@@ -36,6 +37,7 @@
     "gate:tests-integration-ia": "node scripts/runGate.mjs tests-integration-ia",
     "gate:tests-integration-ia_simulator": "node scripts/runGate.mjs tests-integration-ia_simulator",
     "gate:deadcode": "node scripts/runGate.mjs deadcode",
+    "gate:visual-frontend": "node scripts/runGate.mjs visual-frontend",
     "gate:e2e-frontend": "node scripts/runGate.mjs e2e-frontend"
   },
   "lint-staged": {

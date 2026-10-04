@@ -26,6 +26,7 @@ import {
   MONOREPO_APPS
 } from './gates/scope.mjs'
 import { stylesGate } from './gates/styles.mjs'
+import { visualGate } from './gates/visual.mjs'
 
 const GATES = [
   {
@@ -153,6 +154,12 @@ const GATES = [
     id: 'deadcode',
     label: 'Unused files, exports and dependencies (knip)',
     run: scope => forApps(scope, APPS, deadcode)
+  },
+  {
+    id: 'visual-frontend',
+    label: 'Rendered values in a browser against the running app',
+    optIn: true,
+    run: visualGate
   },
   {
     id: 'e2e-frontend',

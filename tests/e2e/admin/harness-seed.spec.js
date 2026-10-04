@@ -2,17 +2,19 @@ const { test, expect } = require('../fixtures')
 
 test.describe('harness seed: admin profile', () => {
   test(
-    'lands on the app carrying the stored admin session',
+    'lands on the users screen carrying the stored domain admin session',
     { tag: ['@harness'] },
-    async ({ page }) => {
-      const response = await page.goto('/')
+    async ({ page, adminApi }) => {
+      const me = await adminApi.get('/v2/me')
+      expect(me.status()).toBe(200)
+      const body = await me.json()
+      expect(body.role).toBe('domain_admin')
+      expect(body.domain).not.toBeNull()
 
-      expect(response.ok()).toBe(true)
-      await expect(page.locator('tails-root')).toBeAttached()
-      const token = await page.evaluate(
-        () => JSON.parse(localStorage.getItem('currentUser') || '{}').token
-      )
-      expect(token).toBeTruthy()
+      await page.goto('/')
+
+      await expect(page).toHaveURL(/\/users$/)
+      await expect(page.getByRole('button', { name: 'Sair' })).toBeVisible()
     }
   )
 })
