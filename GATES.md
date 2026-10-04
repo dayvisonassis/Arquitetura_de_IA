@@ -355,7 +355,9 @@ A verificação do outro lado, a do provedor, é a parte de contratos do `tests-
 
 ## `e2e-frontend`
 
-O harness é do gate. Os testes de feature são da `e2e-test-writer`, que nunca edita o harness.
+O harness é do gate. Os testes de feature são da `e2e-test-writer`, que nunca edita o harness. A `e2e-test-writer` e a
+`e2e-test-validator` são genéricas: leem desta seção o perfil do projeto (perfis, pastas, linguagem dos testes, fixtures,
+origem da API, log, gate e política de dados).
 
 | Peça | Onde |
 |---|---|
@@ -363,6 +365,7 @@ O harness é do gate. Os testes de feature são da `e2e-test-writer`, que nunca 
 | Perfis | um projeto por sessão: `tests/e2e/admin/**` roda como `domain_admin`, `tests/e2e/user/**` como `user`. As duas contas ficam **no mesmo domínio**. O perfil `platform_admin` entra com a F04 (abaixo) |
 | Sessão | [tests/e2e/global-setup.js](tests/e2e/global-setup.js) guarda a sessão em `tests/e2e/.auth/<perfil>.json` (ignorado pelo Git) e **a reaproveita entre execuções** enquanto o JWT não expira (margem de 5 min) |
 | Sementes | `tests/e2e/<perfil>/harness-seed.spec.js`, uma por perfil: provam o harness, não o produto |
+| Linguagem dos testes | JavaScript CommonJS, `.spec.js`: `const { test, expect } = require('../fixtures')` |
 | Fixtures | [tests/e2e/fixtures.js](tests/e2e/fixtures.js) exporta `test` e `expect`, com `adminApi` e `userApi`: request context na **origem do backend** (`E2E_API_URL`, padrão `http://127.0.0.1:3030`) com o Bearer da sessão. Os caminhos começam com `/v2/…` |
 | URL do app | `E2E_BASE_URL`, padrão `http://127.0.0.1:4200` |
 | Log do servidor | `docker compose logs` do container do app (ambiente do `./dev.sh`) |
@@ -375,8 +378,8 @@ O harness é do gate. Os testes de feature são da `e2e-test-writer`, que nunca 
 - **Escopo:** roda quando mudou algo em `apps/frontend/`, `apps/backend/`, `tests/e2e/` ou no
   `playwright.e2e.config.js`. Senão, é no-op. `E2E_FORCE=1` roda mesmo assim. `E2E_SKIP=1` pula com um banner de "não
   verificado": é a válvula do gate, sem relação com proteção anti-bot do app.
-- **Os testes escrevem pelo produto** no banco que o app usa. Quem mantém esse banco limpo é a política de dados da
-  `e2e-test-writer`, não o gate.
+- **Os testes escrevem pelo produto** no banco que o app usa. Quem mantém esse banco limpo é a política de dados abaixo,
+  com as regras D1–D7 da `e2e-test-writer`, não o gate.
 - **Nunca logar por teste.** O login tem limite de tentativas (20 por 15 minutos, mais o bloqueio de 5 erros por
   conta). O harness loga uma vez e reaproveita a sessão.
 
@@ -413,8 +416,18 @@ A F04 completa o harness (é trabalho de gate, feito pela `gate-builder`):
   backend. Depois da F07/F09, o harness pode criar o domínio e as contas pela `platformAdminApi`.
 - O isolamento entre domínios (PRD §4: cada tela com um administrador de outro domínio) não ganha um quarto perfil: ele
   é provado na API, pelos testes de integração do backend, e nas telas, à mão.
-- As regras da `e2e-test-writer` (e da `e2e-test-validator`) hoje aceitam só `admin` e `agent`. Os perfis
-  `platform_admin` e `user` dependem de adaptá-las no repositório das skills antes da rodada da `gate-builder` da F04.
+- A `e2e-test-writer` e a `e2e-test-validator` instaladas são as genéricas (desde 2026-10-04) e leem estes perfis. As
+  variantes e2e com prefixo de outro projeto, que o repositório das skills também tem, ficam fora desta instalação.
+
+**Política de dados:**
+- **Registros protegidos:** nenhum declarado ainda, então vale o padrão: todo registro que o teste não criou é protegido
+  (D1). As três contas do harness e o domínio do seed nunca são editados nem removidos por um teste.
+- **Configuração que os testes só leem:** o catálogo de capacidades do proxy e o estado dele (suspensões e cooldown): mudar
+  esse estado afeta as outras telas e testes. Um fluxo que precise suspender um recurso do catálogo é
+  `not e2e-testable — shared configuration`, até a feature dele declarar aqui como fazê-lo e desfazê-lo.
+- **Criação e remoção:** cada feature que trouxer uma entidade criável pela tela acrescenta aqui a rota de criação, a
+  de remoção, o perfil que pode usá-las e se a remoção é lógica (o registro fica, fora das listagens). Sem rota de
+  remoção declarada, o teste não cria (D5).
 
 ## Ainda não construído
 
@@ -499,6 +512,12 @@ Gate verde não significa feature verificada. O que está abaixo continua sendo 
    e ao `ARCH_TS_CONFIG` em [scripts/gates/code.mjs](scripts/gates/code.mjs).
 
 ## Histórico
+
+### 2026-10-04: skills e2e genéricas
+
+A `e2e-test-writer` e a `e2e-test-validator` instaladas passaram a ser as versões genéricas do repositório das skills,
+que leem desta seção o perfil do projeto. A seção ganhou a linguagem dos testes e a política de dados. As variantes
+e2e com prefixo de outro projeto ficaram fora da instalação, para nenhum agente invocar a skill errada.
 
 ### 2026-10-04: perfis e2e revistos
 

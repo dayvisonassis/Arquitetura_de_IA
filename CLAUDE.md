@@ -71,6 +71,9 @@ fonte da verdade das regras de produto.
 - As skills de `.claude/skills/` são uma cópia da pasta `skills/` do repositório
   [sdd-skills](https://github.com/dayvisonassis/sdd-skills). **Nenhuma skill é criada ou editada direto aqui**: a
   mudança nasce no repositório das skills e depois é copiada para cá.
+- **A cópia deixa de fora as variantes e2e com prefixo de outro projeto** (`<projeto>-e2e-test-writer` e
+  `<projeto>-e2e-test-validator`). Aqui valem só as genéricas `e2e-test-writer` e `e2e-test-validator`, que leem o
+  perfil do projeto da seção e2e do `GATES.md`. Com as duas variantes instaladas, um agente poderia invocar a errada.
 
 ## Segredos e material interno
 
