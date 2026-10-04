@@ -1,7 +1,7 @@
 // The loader would read the local .env.testing; unit tests build the env by hand.
 jest.mock('../../../loader', () => ({}))
 
-import { assertConfig, ConfigError } from '../../../src/config/env'
+import { assertConfig, catalogFile, ConfigError } from '../../../src/config/env'
 
 type EnvModule = typeof import('../../../src/config/env')
 
@@ -110,9 +110,29 @@ describe('config/env', () => {
           PORT: '8080',
           DB_PORT: '3307',
           REDIS_PORT: '6380',
-          LOG_LEVEL: 'debug'
+          LOG_LEVEL: 'debug',
+          CATALOG_FILE: 'catalog/other.json'
         })
       ).not.toThrow()
+    })
+  })
+
+  describe('catalogFile', () => {
+    it('catalogFile should default to catalog/catalog.json', () => {
+      expect(catalogFile({})).toBe('catalog/catalog.json')
+      expect(catalogFile({ CATALOG_FILE: '' })).toBe('catalog/catalog.json')
+    })
+
+    it('should return CATALOG_FILE when it is set', () => {
+      expect(catalogFile({ CATALOG_FILE: 'catalog/other.json' })).toBe(
+        'catalog/other.json'
+      )
+    })
+
+    it('should read process.env at call time when called without an argument', () => {
+      process.env = { ...VALID_ENV, CATALOG_FILE: 'fixtures/catalog.json' }
+
+      expect(catalogFile()).toBe('fixtures/catalog.json')
     })
   })
 

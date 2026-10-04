@@ -1,0 +1,95 @@
+{
+  "deployments": [
+    {
+      "name": "openai-gpt-4-1-mini",
+      "provider": "openai",
+      "model": "gpt-4.1-mini",
+      "credential_env": "OPENAI_API_KEY",
+      "params": ["max_tokens", "temperature", "top_p", "stop", "response_format"],
+      "param_mappings": { "max_tokens": "max_completion_tokens" },
+      "price_per_million_tokens": { "input": 0.4, "output": 1.6 }
+    },
+    {
+      "name": "openai-gpt-4-1",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "credential_env": "OPENAI_API_KEY",
+      "params": ["max_tokens", "temperature", "top_p", "stop", "response_format"],
+      "param_mappings": { "max_tokens": "max_completion_tokens" },
+      "price_per_million_tokens": { "input": 2.0, "output": 8.0 }
+    },
+    {
+      "name": "gemini-2-5-flash",
+      "provider": "gemini",
+      "model": "gemini-2.5-flash",
+      "credential_env": "GEMINI_API_KEY",
+      "params": ["max_tokens", "temperature", "top_p", "stop", "response_format"],
+      "fixed_params": { "reasoning_effort": "none" },
+      "price_per_million_tokens": { "input": 0.3, "output": 2.5 }
+    },
+    {
+      "name": "gemini-2-5-pro",
+      "provider": "gemini",
+      "model": "gemini-2.5-pro",
+      "credential_env": "GEMINI_API_KEY",
+      "params": ["max_tokens", "temperature", "top_p", "stop", "response_format"],
+      "fixed_params": { "reasoning_effort": "low" },
+      "price_per_million_tokens": { "input": 1.25, "output": 10.0 }
+    },
+    {
+      "name": "gemini-2-5-flash-lite",
+      "provider": "gemini",
+      "model": "gemini-2.5-flash-lite",
+      "credential_env": "GEMINI_API_KEY",
+      "params": ["max_tokens", "temperature", "top_p", "stop", "response_format"],
+      "fixed_params": { "reasoning_effort": "none" },
+      "price_per_million_tokens": { "input": 0.1, "output": 0.4 }
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "developer-assistant",
+      "type": "chat",
+      "description": "Responde dúvidas técnicas de desenvolvimento de software.",
+      "primary": "openai-gpt-4-1-mini",
+      "fallback": "gemini-2-5-flash",
+      "timeout_seconds": 30,
+      "max_retries": 2,
+      "max_tokens": 1024,
+      "json_mode": false
+    },
+    {
+      "name": "architecture-advisor",
+      "type": "chat",
+      "description": "Analisa e recomenda decisões de arquitetura de software.",
+      "primary": "gemini-2-5-pro",
+      "fallback": "openai-gpt-4-1",
+      "timeout_seconds": 60,
+      "max_retries": 2,
+      "max_tokens": 2048,
+      "json_mode": false
+    },
+    {
+      "name": "ticket-classifier",
+      "type": "chat",
+      "description": "Classifica a mensagem de um ticket de suporte em categoria e motivo.",
+      "primary": "openai-gpt-4-1-mini",
+      "fallback": "gemini-2-5-flash-lite",
+      "timeout_seconds": 10,
+      "max_retries": 1,
+      "max_tokens": 256,
+      "json_mode": true,
+      "contract": {
+        "format": "json",
+        "fields": [
+          {
+            "name": "category",
+            "type": "string",
+            "allowed": ["billing", "technical", "account", "other"]
+          },
+          { "name": "reason", "type": "string" }
+        ]
+      }
+    }
+  ]
+}

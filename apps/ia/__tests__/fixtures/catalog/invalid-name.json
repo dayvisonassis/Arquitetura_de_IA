@@ -1,0 +1,51 @@
+{
+  "deployments": [
+    {
+      "name": "openai-gpt-4-1-mini",
+      "provider": "openai",
+      "model": "gpt-4.1-mini",
+      "credential_env": "OPENAI_API_KEY",
+      "params": [
+        "max_tokens",
+        "temperature"
+      ],
+      "param_mappings": {
+        "max_tokens": "max_completion_tokens"
+      },
+      "price_per_million_tokens": {
+        "input": 0.4,
+        "output": 1.6
+      }
+    },
+    {
+      "name": "gemini-2-5-flash-lite",
+      "provider": "gemini",
+      "model": "gemini-2.5-flash-lite",
+      "credential_env": "GEMINI_API_KEY",
+      "params": [
+        "max_tokens",
+        "temperature"
+      ],
+      "fixed_params": {
+        "reasoning_effort": "none"
+      },
+      "price_per_million_tokens": {
+        "input": 0.1,
+        "output": 0.4
+      }
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Ticket_Classifier",
+      "type": "chat",
+      "description": "Classifies a support ticket.",
+      "primary": "openai-gpt-4-1-mini",
+      "fallback": "gemini-2-5-flash-lite",
+      "timeout_seconds": 10,
+      "max_retries": 1,
+      "max_tokens": 256,
+      "json_mode": false
+    }
+  ]
+}

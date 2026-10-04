@@ -48,8 +48,14 @@ const RULES: Rule[] = [
   ['GATEWAY_MASTER_KEY', required(value => value.length >= 32)],
   ['OPENAI_API_KEY', required(present)],
   ['GEMINI_API_KEY', required(present)],
-  ['LOG_LEVEL', optional(value => LOG_LEVELS.includes(value))]
+  ['LOG_LEVEL', optional(value => LOG_LEVELS.includes(value))],
+  ['CATALOG_FILE', optional(present)]
 ]
+
+const DEFAULT_CATALOG_FILE = 'catalog/catalog.json'
+
+export const catalogFile = (env: Env = process.env): string =>
+  read(env, 'CATALOG_FILE') ?? DEFAULT_CATALOG_FILE
 
 const buildConfig = (env: Env) => {
   const value = (name: string) => read(env, name)
