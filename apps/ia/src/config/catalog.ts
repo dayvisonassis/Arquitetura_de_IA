@@ -12,7 +12,7 @@ type ContractField = {
   allowed?: Array<string | number | boolean>
 }
 
-type Deployment = {
+export type Deployment = {
   name: string
   provider: 'openai' | 'gemini' | 'simulated'
   model: string
@@ -23,7 +23,7 @@ type Deployment = {
   price_per_million_tokens: { input: number; output: number }
 }
 
-type Capability = {
+export type Capability = {
   name: string
   type: 'chat'
   description: string

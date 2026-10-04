@@ -56,6 +56,28 @@ falsos do Jest para o prazo de 2 s.
       em cooldown) ou com a capacidade já suspensa
 - Cobertura do `src/services/catalog-state.service.ts`: 100% em linhas e funções, 98,9% em branches
 
+### `controllers/catalog.controller.test.ts` → `src/controllers/catalog.controller.ts`
+Mocks: `config/catalog` (`getCatalog`), `logger` e o serviço de estado (as classes de erro reais, as funções mocadas).
+`req`/`res`/`next` mocados (regra NE1).
+- [x] `GET /admin/catalog`: 200 com as definições e o estado, sem `credential_env`; 503 com a mensagem de leitura;
+      erro inesperado vai para o `next`
+- [x] suspend de capacidade: motivo aparado, resposta `suspended`, `warnings` vazio, log `info` com tipo, nome, autor,
+      motivo e request ID (pelo `req.log`, ou pelo logger do app quando o `req.log` falta)
+- [x] suspend de deployment: avisos com o texto do PRD; o `cooldown_until` em curso é preservado
+- [x] 404 para capacidade e deployment inexistentes, antes de validar o corpo
+- [x] 400: corpo ausente, sem `reason`, `reason` só com espaços ou acima de 200, sem `actor`, `actor` que não é e-mail ou
+      acima de 254, campo não aceito, corpo que não é objeto; nada é lido nem gravado
+- [x] 409 de "já está suspensa/suspenso" e de "não está suspensa/suspenso", por tipo
+- [x] 503 "Nada foi alterado" (falha antes da escrita) e 503 de resultado não confirmado; erro inesperado vai para o
+      `next`
+- [x] resume: capacidade volta a `active`; deployment com cooldown em curso volta a `cooldown`; `reason` vazio aceito e
+      acima de 200 recusado
+- Cobertura do `src/controllers/catalog.controller.ts`, `src/routes/catalog.routes.ts` e `src/routes/admin.routes.ts`:
+  100%
+
+### `app.test.ts` → `src/app.ts` (acréscimo da F02)
+- [x] as rotas do catálogo exigem a master key (401 `invalid_admin_key` no `GET` e no `POST`)
+
 ### `config/env.test.ts` → `src/config/env.ts` (acréscimos da F02)
 - [x] `CATALOG_FILE` aceito na validação
 - [x] `catalogFile()` devolve o padrão sem a variável e com ela vazia, o valor quando definida, e lê o `process.env` na

@@ -65,6 +65,17 @@ describe('app', () => {
     expect(response.headers['x-request-id']).toBe(VALID_ID)
   })
 
+  it('should require the master key on the catalog routes', async () => {
+    const listed = await request(app).get('/admin/catalog')
+    const suspended = await request(app)
+      .post('/admin/capabilities/ticket-classifier/suspend')
+      .send({ reason: 'x', actor: 'admin@aigateway.test' })
+
+    expect(listed.status).toBe(401)
+    expect(listed.body).toEqual(UNAUTHORIZED)
+    expect(suspended.status).toBe(401)
+  })
+
   it('should answer 401 with a wrong master key', async () => {
     const response = await request(app)
       .get('/admin/domains')
