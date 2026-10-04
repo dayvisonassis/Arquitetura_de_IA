@@ -20,7 +20,7 @@ function apiFixture(profile) {
 
 const test = base.test.extend({
   adminApi: apiFixture('admin'),
-  agentApi: apiFixture('agent')
+  userApi: apiFixture('user')
 })
 
 module.exports = { test, expect: base.expect }

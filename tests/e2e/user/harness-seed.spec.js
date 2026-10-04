@@ -1,8 +1,8 @@
 const { test, expect } = require('../fixtures')
 
-test.describe('harness seed: agent profile', () => {
+test.describe('harness seed: user profile', () => {
   test(
-    'lands on the app carrying the stored agent session',
+    'lands on the app carrying the stored user session',
     { tag: ['@harness'] },
     async ({ page }) => {
       const response = await page.goto('/')

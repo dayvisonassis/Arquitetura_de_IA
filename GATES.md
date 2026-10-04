@@ -360,10 +360,10 @@ O harness é do gate. Os testes de feature são da `e2e-test-writer`, que nunca 
 | Peça | Onde |
 |---|---|
 | Config do runner | [playwright.e2e.config.js](playwright.e2e.config.js) (CommonJS), `testDir: './tests/e2e'`, 1 worker, sem retry, headless, screenshot e trace em falha (`test-results/e2e/`) |
-| Perfis | um projeto por sessão: `tests/e2e/admin/**` roda como `domain_admin`, `tests/e2e/agent/**` como `user`. As duas contas ficam **no mesmo domínio** |
+| Perfis | um projeto por sessão: `tests/e2e/admin/**` roda como `domain_admin`, `tests/e2e/user/**` como `user`. As duas contas ficam **no mesmo domínio**. O perfil `platform_admin` entra com a F04 (abaixo) |
 | Sessão | [tests/e2e/global-setup.js](tests/e2e/global-setup.js) guarda a sessão em `tests/e2e/.auth/<perfil>.json` (ignorado pelo Git) e **a reaproveita entre execuções** enquanto o JWT não expira (margem de 5 min) |
 | Sementes | `tests/e2e/<perfil>/harness-seed.spec.js`, uma por perfil: provam o harness, não o produto |
-| Fixtures | [tests/e2e/fixtures.js](tests/e2e/fixtures.js) exporta `test` e `expect`, com `adminApi` e `agentApi`: request context na **origem do backend** (`E2E_API_URL`, padrão `http://127.0.0.1:3030`) com o Bearer da sessão. Os caminhos começam com `/v2/…` |
+| Fixtures | [tests/e2e/fixtures.js](tests/e2e/fixtures.js) exporta `test` e `expect`, com `adminApi` e `userApi`: request context na **origem do backend** (`E2E_API_URL`, padrão `http://127.0.0.1:3030`) com o Bearer da sessão. Os caminhos começam com `/v2/…` |
 | URL do app | `E2E_BASE_URL`, padrão `http://127.0.0.1:4200` |
 | Log do servidor | `docker compose logs` do container do app (ambiente do `./dev.sh`) |
 | Gate | `npm run gate:e2e-frontend` |
@@ -386,20 +386,33 @@ O login só existe a partir da F04. Até lá, o global setup falha com a mensage
 flow arrives with F04`. Por isso o gate é optIn e **não conta como suíte e2e** para as skills do SDD.
 
 A F04 completa o harness (é trabalho de gate, feito pela `gate-builder`):
-1. o perfil `admin_platform` (projeto, semente e fixture de API), ao lado de `admin` e `agent`;
-2. o login no global setup, pela API, com as contas de `E2E_ADMIN_PLATFORM_LOGIN`/`E2E_ADMIN_PLATFORM_PASSWORD`,
-   `E2E_ADMIN_LOGIN`/`E2E_ADMIN_PASSWORD` e `E2E_AGENT_LOGIN`/`E2E_AGENT_PASSWORD`, gravando o `currentUser` no
+1. o perfil `platform_admin` (projeto, semente e fixture de API `platformAdminApi`), ao lado de `admin` e `user`;
+2. o login no global setup, pela API, com as contas de `E2E_PLATFORM_ADMIN_LOGIN`/`E2E_PLATFORM_ADMIN_PASSWORD`,
+   `E2E_ADMIN_LOGIN`/`E2E_ADMIN_PASSWORD` e `E2E_USER_LOGIN`/`E2E_USER_PASSWORD`, gravando o `currentUser` no
    `localStorage` do storage state;
 3. a configuração anti-bot de não produção, se a F04 tiver uma, documentada aqui;
-4. as sementes conferindo o marcador da tela autenticada, e a do `agent` conferindo pela `adminApi` que as contas de
-   `admin` e `agent` estão no mesmo domínio;
+4. as sementes conferindo o marcador da tela autenticada, e a do `user` conferindo pela `adminApi` que as contas de
+   `admin` e `user` estão no mesmo domínio;
 5. a prova falha → passa (quebrar uma semente de propósito), o registro da data aqui e a entrada do gate na cadeia
    padrão.
 
-**Decidido em 2026-10-03:** três perfis, `admin_platform` = `platform_admin`, `admin` = `domain_admin` e
-`agent` = `user`, com as variáveis acima e o diretório `tests/e2e/<perfil>/`. As senhas ficam só nos arquivos de
-ambiente locais. O banco de desenvolvimento começa vazio e é só de teste. As regras da `e2e-test-writer` hoje aceitam
-só `admin` e `agent`: o terceiro perfil depende de adaptá-las no repositório das skills antes da rodada da F04.
+**Perfis (decididos em 2026-10-03, revistos em 2026-10-04):**
+
+| Perfil | Papel no PRD | Quem é |
+|---|---|---|
+| `platform_admin` | `platform_admin` | administrador da plataforma: cria, edita, remove e restaura domínios. Não pertence a nenhum domínio |
+| `admin` | `domain_admin` | administrador de um domínio específico, criado pelo `platform_admin` |
+| `user` | `user` | usuário não administrador do mesmo domínio do `admin` |
+
+- O nome do perfil é o do papel no PRD, menos no `admin`, que é o `domain_admin`. A pasta é `tests/e2e/<perfil>/`.
+- As três contas usam a mesma senha, que fica só nos arquivos de ambiente locais. O banco de desenvolvimento começa
+  vazio e é só de teste.
+- Antes da F05/F07, que trazem a API e a tela de domínios, o domínio e as contas do `admin` e do `user` vêm de um seed
+  de desenvolvimento, a definir na spec da F04. Depois, o harness pode criá-los pela `platformAdminApi`.
+- O isolamento entre domínios (PRD §4: cada tela com um administrador de outro domínio) não ganha um quarto perfil: ele
+  é provado na API, pelos testes de integração do backend, e nas telas, à mão.
+- As regras da `e2e-test-writer` (e da `e2e-test-validator`) hoje aceitam só `admin` e `agent`. Os perfis
+  `platform_admin` e `user` dependem de adaptá-las no repositório das skills antes da rodada da `gate-builder` da F04.
 
 ## Ainda não construído
 
@@ -484,6 +497,17 @@ Gate verde não significa feature verificada. O que está abaixo continua sendo 
    e ao `ARCH_TS_CONFIG` em [scripts/gates/code.mjs](scripts/gates/code.mjs).
 
 ## Histórico
+
+### 2026-10-04: perfis e2e revistos
+
+O usuário fechou os perfis do harness e2e: `platform_admin`, `admin` (o `domain_admin`) e `user`, este no lugar do
+`agent`, um nome menos intuitivo para um usuário comum de domínio.
+
+- **Harness renomeado:** a pasta `tests/e2e/agent/` virou `tests/e2e/user/`, o projeto do Playwright e a lista de
+  perfis passaram a `admin` e `user`, e a fixture `agentApi` virou `userApi`. O perfil `platform_admin` continua para a
+  F04, com as variáveis `E2E_PLATFORM_ADMIN_*` no lugar das `E2E_ADMIN_PLATFORM_*`.
+- **Prova:** com o app no ar, `E2E_FORCE=1 npm run gate:e2e-frontend` carrega os projetos `admin` e `user` (uma semente
+  em cada) e para no global setup com `No valid stored session for: admin, user`, a mensagem esperada até a F04.
 
 ### 2026-10-04: rodada prévia da F03
 

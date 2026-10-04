@@ -1,7 +1,7 @@
 const fs = require('fs')
 const path = require('path')
 
-const PROFILES = ['admin', 'agent']
+const PROFILES = ['admin', 'user']
 const AUTH_DIR = path.join(__dirname, '.auth')
 const BASE_URL = process.env.E2E_BASE_URL || 'http://127.0.0.1:4200'
 const API_URL = process.env.E2E_API_URL || 'http://127.0.0.1:3030'

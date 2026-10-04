@@ -21,5 +21,5 @@ module.exports = defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure'
   },
-  projects: [profile('admin'), profile('agent')]
+  projects: [profile('admin'), profile('user')]
 })
