@@ -119,6 +119,62 @@ cd apps/backend && npm run migration:add -- nome_da_migration   # idem em apps/i
 npm run migrations:dev                                          # o ./dev.sh já faz isso
 ```
 
+## Catálogo de capacidades
+
+As capacidades (`developer-assistant`, `architecture-advisor`, `ticket-classifier`) e os deployments que as atendem
+(provedor, modelo físico, credencial, parâmetros e preços) ficam em
+[apps/ia/catalog/catalog.json](apps/ia/catalog/catalog.json). Os campos e as faixas aceitas estão na
+[spec da F02](docs/F02-catalogo-de-capacidades/spec.md) (§5). A credencial é o **nome** de uma variável do
+`apps/ia/.env.<ambiente>`, nunca o valor.
+
+**Depois de editar o arquivo, reinicie o proxy.** O catálogo é lido só na partida, e a recarga automática do container
+não observa o JSON:
+
+```bash
+docker compose -p ai-gateway-app restart ia
+```
+
+**Catálogo inválido:** o proxy não sobe. Ele sai com código 1 e uma linha `Invalid catalog: <problema>` por problema,
+por exemplo `Invalid catalog: capability 'ticket-classifier' points to fallback 'gemini-lite', which does not exist`. No
+container, o serviço fica `unhealthy`, e as linhas aparecem no log do `ia`.
+
+**Outro arquivo:** a variável opcional `CATALOG_FILE` (caminho relativo a `apps/ia`, padrão `catalog/catalog.json`)
+troca o catálogo, por exemplo para testar uma fixture sem editar o versionado:
+
+```bash
+cd apps/ia
+CATALOG_FILE=__tests__/fixtures/catalog/fallback-missing.json node -r ts-node/register/transpile-only index.ts
+```
+
+**Suspender e reativar** uma capacidade ou um deployment, pela API administrativa do proxy, com a master key (lida do
+arquivo, sem imprimi-la):
+
+```bash
+KEY=$(grep '^GATEWAY_MASTER_KEY=' apps/ia/.env.development | cut -d= -f2-)
+
+curl -s -H "Authorization: Bearer $KEY" http://127.0.0.1:3131/admin/catalog
+
+curl -s -H "Authorization: Bearer $KEY" -H 'content-type: application/json' \
+  -d '{"reason":"Incidente no provedor","actor":"admin_platform@aigateway.test"}' \
+  http://127.0.0.1:3131/admin/deployments/openai-gpt-4-1-mini/suspend
+
+curl -s -H "Authorization: Bearer $KEY" -H 'content-type: application/json' \
+  -d '{"actor":"admin_platform@aigateway.test"}' \
+  http://127.0.0.1:3131/admin/deployments/openai-gpt-4-1-mini/resume
+```
+
+- **Equivalentes para capacidade:** `/admin/capabilities/<nome>/suspend` e `/resume`.
+- **Efeito:** imediato, sem reiniciar nada.
+- **Persistência:** a suspensão fica na tabela `catalog_suspensions` (MySQL) e é replicada no Redis, então sobrevive a
+  um reinício do proxy e do Redis. O cooldown fica só no Redis.
+- **Erros:**
+  - nome fora do catálogo → 404;
+  - `reason` ausente ou acima de 200 caracteres, ou `actor` que não é e-mail → 400;
+  - suspender o que já está suspenso, ou reativar o que está ativo → 409;
+  - MySQL ou Redis fora do ar → 503 em até 3 s, sem alterar nada.
+- **Acentos no Windows:** o `curl` envia o argumento `-d` na página de código ANSI, então um motivo com acento chega
+  corrompido. Escreva sem acento, ou mande o corpo de um arquivo UTF-8 com `--data-binary @corpo.json`.
+
 ## Testes e lint
 
 Da raiz:
