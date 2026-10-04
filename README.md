@@ -197,7 +197,7 @@ requisição. Um modelo sem modo configurado responde em `ok`.
 | `mode` | Comportamento | Campos |
 |---|---|---|
 | `ok` | resposta fixa, padrão `Resposta simulada.` | `content` (opcional) |
-| `error` | o status configurado, com o corpo de erro da OpenAI | `status` (401, 429, 500, 502 ou 503); `retry_after_seconds` (0 a 120, só no 429 e no 503), que vira o header `Retry-After` |
+| `error` | o status configurado, com o corpo de erro da OpenAI | `status`: 400, 401, 403 ou 404 (falhas definitivas da F17, sem retry), ou 429, 500, 502 ou 503 (transitórias); `retry_after_seconds` (0 a 120, só no 429 e no 503), que vira o header `Retry-After` |
 | `slow` | espera e responde como `ok` | `delay_ms` (0 a 120.000); `content` (opcional) |
 | `timeout` | nunca responde; a conexão fica aberta até o cliente desistir | — |
 | `fenced-json` | JSON válido entre crases, com a marcação `json`; padrão: a resposta da demo D7 | `content` (opcional, JSON) |

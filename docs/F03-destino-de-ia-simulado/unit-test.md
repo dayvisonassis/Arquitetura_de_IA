@@ -98,8 +98,8 @@ Mocks: nenhum; o horário entra pelo parâmetro `now`.
 - [x] `responseContent`: padrão e configurado de `ok`, `slow` e `invalid-json`; o padrão do `invalid-json` não é JSON
 - [x] `should wrap JSON in a json code fence` (nome da §7): padrão (a resposta da D7) e configurado, com a cerca `json`
       da §5 e o JSON interno válido
-- [x] `simulatedError`: o `type`, o `code` e a `message` da tabela da §5 para 401, 429, 500, 502 e 503; status fora
-      da tabela → `undefined`
+- [x] `simulatedError`: o `type`, o `code` e a `message` da tabela da §5 para os oito status (400, 401, 403, 404, 429,
+      500, 502 e 503); status fora da tabela (418 e 504) → `undefined`
 - [x] `should build an OpenAI chat completion` (nome da §7): `id` `chatcmpl-sim-` + 32 hexadecimais, `object`,
       `created` em segundos Unix, `model`, `choices` e `usage` 10/5/15, nesta ordem de campos
 - [x] cada chamada sorteia um `id` novo; sem `now`, `created` é o horário atual
@@ -122,9 +122,11 @@ o `fetch` com `AbortController`. O estado real é zerado com `reset()` antes de 
 - [x] corte pela requisição: `max_completion_tokens: 2`, só `max_tokens: 2`, `max_completion_tokens: null` com
       `max_tokens: 2` → `Resposta`, `length`, 2 tokens; `256` com `max_tokens: 2` e os dois `null` → sem corte; sem
       limite → sem corte
-- [x] `should answer the configured error with the OpenAI body and Retry-After` (nome da §7): cada status (401, 429,
-      500, 502, 503) com o corpo da tabela e sem `Retry-After`; 429 e 503 com `retry_after_seconds: 2` → `Retry-After:
-      2`
+- [x] `should answer the configured error with the OpenAI body and Retry-After` (nome da §7): cada um dos oito status
+      (400, 401, 403, 404, 429, 500, 502 e 503) com o corpo da tabela e sem `Retry-After`; 429 e 503 com
+      `retry_after_seconds: 2` → `Retry-After: 2`
+- [x] o 400 simulado (`unsupported_parameter`, sem `Retry-After`) é contado no `GET /control/stats` como `error`, e o
+      400 da validação do próprio simulador (`invalid_request`), no mesmo modelo, não é
 - [x] `retry_after_seconds: 0` envia `Retry-After: 0`; o log traz o status configurado
 - [x] `Retry-After` e volta ao `ok` depois do `times`
 - [x] `should wait delay_ms in slow mode` (nome da §7): a espera recebe 15000 e um `AbortSignal` ainda não abortado;
@@ -156,18 +158,20 @@ o `fetch` com `AbortController`. O estado real é zerado com `reset()` antes de 
 ### `controllers/control.controller.test.ts` → `src/controllers/control.controller.ts`
 Mocks: `logger` (`info` e `error`). As requisições passam pelo supertest sobre o `app`, com o estado real zerado com
 `reset()` antes de cada teste.
-- [x] `should validate each mode` (nome da §7): 40 corpos inválidos, cada um com uma única violação da tabela da §5
+- [x] `should validate each mode` (nome da §7): 43 corpos inválidos, cada um com uma única violação da tabela da §5
       (corpo lista; `mode` ausente, desconhecido como `crash`, em maiúsculas ou `null`; `model` ausente, vazio, com
       201 caracteres ou numérico; `times` 0, 1001, decimal, em string ou `null`; `content` vazio, com 20.001
-      caracteres ou numérico; `error` sem `status`; `status` 400 ou em string; `retry_after_seconds` -1, 121,
-      decimal, ou com 500, 401 e 502; `slow` sem `delay_ms`; `delay_ms` 120001, -1 ou decimal; `content` que não é
-      JSON no `fenced-json`; objeto e número JSON no `invalid-json`; campo `foo`; `content`, `status`, `delay_ms` e
-      `retry_after_seconds` fora dos modos deles) → 400 `invalid_value` com a mensagem citando o campo; o modo já
-      guardado não muda e nada é registrado no log
-- [x] os mesmos 40 casos, um a um, sem nada guardado depois
+      caracteres ou numérico; `error` sem `status`; `status` 418 ou em string, com a mensagem que lista os oito status;
+      `retry_after_seconds` -1, 121, decimal, ou com 500, 401, 502, 400, 403 e 404; `slow` sem `delay_ms`; `delay_ms`
+      120001, -1 ou decimal; `content` que não é JSON no `fenced-json`; objeto e número JSON no `invalid-json`; campo
+      `foo`; `content`, `status`, `delay_ms` e `retry_after_seconds` fora dos modos deles) → 400 `invalid_value` com a
+      mensagem citando o campo; o modo já guardado não muda e nada é registrado no log
+- [x] os mesmos 43 casos, um a um, sem nada guardado depois
 - [x] as fronteiras aceitas: `model` de 200 caracteres, `times` 1 e 1000, `content` de 20.000 caracteres, `status`
       401, 500 e 502, `retry_after_seconds` 0 com 429 e 120 com 503, `delay_ms` 0 e 120000, `timeout` sem campos, lista
       JSON no `fenced-json` e texto no `invalid-json`
+- [x] os status definitivos 400, 403 e 404 são aceitos: 200 com o modo guardado (`remaining_calls: null`), o
+      `GET /control/modes` lista o mesmo e a chamada seguinte ao `/v1/chat/completions` responde esse status
 - [x] corpo que não é JSON ou primitivo JSON → 400 `invalid_json` do parser, sem nada guardado; corpo `text/plain`
       chega vazio e recebe `The field 'mode' is required.`
 - [x] `should store and list a mode` (nome da §7): o exemplo da §5 → 200 com `remaining_calls: 3` e o log
@@ -181,5 +185,5 @@ Mocks: `logger` (`info` e `error`). As requisições passam pelo supertest sobre
       o reset de um estado vazio, com corpo, também responde 204
 - Cobertura do `src/controllers/control.controller.ts`: 100% em linhas, funções e branches
 
-Suíte unitária inteira do app (`npx jest __tests__/unit/ --coverage`): 11 arquivos, 207 testes, 100% em linhas,
+Suíte unitária inteira do app (`npx jest __tests__/unit/ --coverage`): 11 arquivos, 217 testes, 100% em linhas,
 funções, branches e statements sobre `src/**`. Gates `tests-monorepo` e `lint-monorepo` (`apps/ia_simulator`): PASS.

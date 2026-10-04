@@ -145,10 +145,28 @@ describe('completion.service', () => {
   describe('simulatedError', () => {
     it.each([
       [
+        400,
+        'invalid_request_error',
+        'unsupported_parameter',
+        'Unsupported parameter: this parameter is not supported with this model.'
+      ],
+      [
         401,
         'invalid_request_error',
         'invalid_api_key',
         'Incorrect API key provided.'
+      ],
+      [
+        403,
+        'request_forbidden',
+        'unsupported_country_region_territory',
+        'Country, region, or territory not supported.'
+      ],
+      [
+        404,
+        'invalid_request_error',
+        'model_not_found',
+        'The model does not exist or you do not have access to it.'
       ],
       [
         429,
@@ -177,7 +195,9 @@ describe('completion.service', () => {
     )
 
     it('should answer undefined for a status outside the table', () => {
-      expect(simulatedError(400)).toBeUndefined()
+      // 418 and 504 are valid HTTP statuses that the spec §5 table leaves out.
+      expect(simulatedError(418)).toBeUndefined()
+      expect(simulatedError(504)).toBeUndefined()
     })
   })
 

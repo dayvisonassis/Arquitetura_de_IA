@@ -14,7 +14,8 @@ const RULES = {
   model: "The field 'model' must be a string from 1 to 200 characters.",
   times: "The field 'times' must be an integer from 1 to 1000.",
   content: "The field 'content' must be a string from 1 to 20000 characters.",
-  status: "The field 'status' must be one of 401, 429, 500, 502, 503.",
+  status:
+    "The field 'status' must be one of 400, 401, 403, 404, 429, 500, 502, 503.",
   retryAfter:
     "The field 'retry_after_seconds' must be an integer from 0 to 120.",
   delay: "The field 'delay_ms' must be an integer from 0 to 120000."
@@ -100,7 +101,7 @@ const INVALID_BODIES: Array<[string, object, string]> = [
     { model: MODEL, mode: 'error' },
     "The field 'status' is required."
   ],
-  ['status 400', { model: MODEL, mode: 'error', status: 400 }, RULES.status],
+  ['status 418', { model: MODEL, mode: 'error', status: 418 }, RULES.status],
   [
     'status as a string',
     { model: MODEL, mode: 'error', status: '503' },
@@ -134,6 +135,21 @@ const INVALID_BODIES: Array<[string, object, string]> = [
   [
     'retry_after_seconds with status 502',
     { model: MODEL, mode: 'error', status: 502, retry_after_seconds: 0 },
+    "The field 'retry_after_seconds' is only accepted with status 429 or 503."
+  ],
+  [
+    'retry_after_seconds with status 400',
+    { model: MODEL, mode: 'error', status: 400, retry_after_seconds: 2 },
+    "The field 'retry_after_seconds' is only accepted with status 429 or 503."
+  ],
+  [
+    'retry_after_seconds with status 403',
+    { model: MODEL, mode: 'error', status: 403, retry_after_seconds: 0 },
+    "The field 'retry_after_seconds' is only accepted with status 429 or 503."
+  ],
+  [
+    'retry_after_seconds with status 404',
+    { model: MODEL, mode: 'error', status: 404, retry_after_seconds: 120 },
     "The field 'retry_after_seconds' is only accepted with status 429 or 503."
   ],
   [
@@ -293,6 +309,27 @@ describe('control.controller', () => {
         remaining_calls: body.times ?? null
       })
     })
+
+    it.each([400, 403, 404])(
+      'should accept the definitive error status %i and store it',
+      async status => {
+        const response = await postMode({ model: MODEL, mode: 'error', status })
+
+        expect(response.status).toBe(200)
+        expect(response.body).toEqual({
+          model: MODEL,
+          mode: 'error',
+          status,
+          remaining_calls: null
+        })
+        expect((await getModes()).body).toEqual({
+          modes: { [MODEL]: { mode: 'error', status, remaining_calls: null } }
+        })
+        // The completions endpoint answers the stored status, so the accepted
+        // list and the error table of the simulator stay in step.
+        expect((await complete()).status).toBe(status)
+      }
+    )
 
     it('should answer a body that is not JSON with 400 invalid_json', async () => {
       const responses = await Promise.all([

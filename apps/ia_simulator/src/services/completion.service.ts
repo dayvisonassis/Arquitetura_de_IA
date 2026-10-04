@@ -18,10 +18,26 @@ const DEFAULT_INVALID_JSON =
   'Categoria: billing. Motivo: cobrança duplicada na assinatura.'
 
 const SIMULATED_ERRORS: Record<number, SimulatedError> = {
+  400: {
+    type: 'invalid_request_error',
+    code: 'unsupported_parameter',
+    message:
+      'Unsupported parameter: this parameter is not supported with this model.'
+  },
   401: {
     type: 'invalid_request_error',
     code: 'invalid_api_key',
     message: 'Incorrect API key provided.'
+  },
+  403: {
+    type: 'request_forbidden',
+    code: 'unsupported_country_region_territory',
+    message: 'Country, region, or territory not supported.'
+  },
+  404: {
+    type: 'invalid_request_error',
+    code: 'model_not_found',
+    message: 'The model does not exist or you do not have access to it.'
   },
   429: {
     type: 'requests',
@@ -40,6 +56,9 @@ const SIMULATED_ERRORS: Record<number, SimulatedError> = {
     message: 'The engine is currently overloaded, please try again later.'
   }
 }
+
+export const SIMULATED_ERROR_STATUSES =
+  Object.keys(SIMULATED_ERRORS).map(Number)
 
 const charactersOf = (text: string): string[] => Array.from(text)
 

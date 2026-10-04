@@ -197,4 +197,39 @@ describe('simulator process', () => {
     const recovered = await complete()
     expect(recovered.status).toBe(200)
   })
+
+  it('should answer the definitive errors 400, 403 and 404 and count each call', async () => {
+    // F17 sends these straight to the fallback, without retry: each model
+    // must see exactly one call.
+    const definitive = [
+      { status: 400, code: 'unsupported_parameter' },
+      { status: 403, code: 'unsupported_country_region_territory' },
+      { status: 404, code: 'model_not_found' }
+    ]
+    for (const { status } of definitive) {
+      const response = await post('/control/modes', {
+        model: `definitive-${status}`,
+        mode: 'error',
+        status
+      })
+      expect(response.status).toBe(200)
+    }
+
+    for (const { status, code } of definitive) {
+      const response = await complete({
+        ...SPEC_REQUEST,
+        model: `definitive-${status}`
+      })
+      const body = (await response.json()) as { error: { code: string } }
+
+      expect(response.status).toBe(status)
+      expect(body.error.code).toBe(code)
+      expect(response.headers.get('retry-after')).toBeNull()
+    }
+
+    const models = (await stats()).models
+    for (const { status } of definitive) {
+      expect(models[`definitive-${status}`].calls).toBe(1)
+    }
+  })
 })

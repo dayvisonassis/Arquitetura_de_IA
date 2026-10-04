@@ -22,6 +22,8 @@ Cada teste começa com `POST /control/reset` (204).
 - [x] `fenced-json`: o conteúdo começa com a cerca `json` e termina com a de fechamento, e o miolo é a resposta da D7
       (critério 4)
 - [x] `error` 429 com `retry_after_seconds: 2` e `times: 1`: 429 com `Retry-After: 2`, e a chamada seguinte recebe 200
+- [x] erros definitivos 400, 403 e 404, um modelo por status: o status e o `code` da tabela da spec (o 400 com
+      `unsupported_parameter`), sem `Retry-After`, e `calls: 1` em cada modelo (acrescentado com a mudança `98ca35d`)
 
 ## `apps/ia/__tests__/integration/`
 

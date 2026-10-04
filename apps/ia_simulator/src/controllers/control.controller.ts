@@ -2,6 +2,7 @@ import type { Request, Response } from 'express'
 import Joi from 'joi'
 import { sendApiError } from '../lib/api-error'
 import logger from '../logger'
+import { SIMULATED_ERROR_STATUSES } from '../services/completion.service'
 import {
   getStats,
   listModes,
@@ -20,14 +21,13 @@ type Field =
   | 'retry_after_seconds'
   | 'delay_ms'
 
-const ERROR_STATUSES = [401, 429, 500, 502, 503]
 const RETRY_AFTER_STATUSES = [429, 503]
 
 const FIELD_RULES: Record<Field, string> = {
   model: "The field 'model' must be a string from 1 to 200 characters.",
   times: "The field 'times' must be an integer from 1 to 1000.",
   content: "The field 'content' must be a string from 1 to 20000 characters.",
-  status: "The field 'status' must be one of 401, 429, 500, 502, 503.",
+  status: `The field 'status' must be one of ${SIMULATED_ERROR_STATUSES.join(', ')}.`,
   retry_after_seconds:
     "The field 'retry_after_seconds' must be an integer from 0 to 120.",
   delay_ms: "The field 'delay_ms' must be an integer from 0 to 120000."
@@ -46,7 +46,7 @@ const SCHEMAS: Record<ModeName, Joi.ObjectSchema> = {
   error: Joi.object({
     ...base('error'),
     status: Joi.number()
-      .valid(...ERROR_STATUSES)
+      .valid(...SIMULATED_ERROR_STATUSES)
       .required(),
     retry_after_seconds: Joi.number().integer().min(0).max(120)
   }),

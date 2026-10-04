@@ -31,12 +31,32 @@ const SPEC_REQUEST = {
   response_format: { type: 'json_object' }
 }
 
+// The error table of spec §5, one row per status the error mode accepts.
 const OPENAI_ERRORS = [
+  {
+    status: 400,
+    type: 'invalid_request_error',
+    code: 'unsupported_parameter',
+    message:
+      'Unsupported parameter: this parameter is not supported with this model.'
+  },
   {
     status: 401,
     type: 'invalid_request_error',
     code: 'invalid_api_key',
     message: 'Incorrect API key provided.'
+  },
+  {
+    status: 403,
+    type: 'request_forbidden',
+    code: 'unsupported_country_region_territory',
+    message: 'Country, region, or territory not supported.'
+  },
+  {
+    status: 404,
+    type: 'invalid_request_error',
+    code: 'model_not_found',
+    message: 'The model does not exist or you do not have access to it.'
   },
   {
     status: 429,
@@ -235,6 +255,10 @@ describe('completions.controller', () => {
 
   describe('error mode', () => {
     it('should answer the configured error with the OpenAI body and Retry-After', async () => {
+      expect(OPENAI_ERRORS.map(({ status }) => status)).toEqual([
+        400, 401, 403, 404, 429, 500, 502, 503
+      ])
+
       for (const { status, type, code, message } of OPENAI_ERRORS) {
         state.setMode({ model: MODEL, mode: 'error', status })
 
@@ -262,6 +286,40 @@ describe('completions.controller', () => {
         )
       }
       expect(wait).not.toHaveBeenCalled()
+    })
+
+    it('should count a simulated 400 in the stats, unlike its own validation 400', async () => {
+      state.setMode({ model: MODEL, mode: 'error', status: 400 })
+
+      const rejected = await complete(without(SPEC_REQUEST, 'messages'))
+      const simulated = await complete()
+
+      expect(rejected.status).toBe(400)
+      expect(rejected.body.error.code).toBe('invalid_request')
+      expect(simulated.status).toBe(400)
+      expect(simulated.body).toEqual({
+        error: {
+          message:
+            'Unsupported parameter: this parameter is not supported with this model.',
+          type: 'invalid_request_error',
+          code: 'unsupported_parameter'
+        }
+      })
+      expect(simulated.headers['retry-after']).toBeUndefined()
+      const stats = await request(server).get('/control/stats')
+      expect(stats.status).toBe(200)
+      expect(stats.body.models).toEqual({
+        [MODEL]: {
+          calls: 1,
+          requests: [
+            {
+              received_at: expect.any(String),
+              mode: 'error',
+              body: SPEC_REQUEST
+            }
+          ]
+        }
+      })
     })
 
     it('should send Retry-After 0 when retry_after_seconds is 0', async () => {
