@@ -17,10 +17,10 @@
       "updatedAt": "2026-10-04T01:15:00.000Z"
     },
     "F02": {
-      "state": "PENDING_EVALUATION",
+      "state": "CLEAN",
       "attempt": 0,
       "lastEvaluationReport": null,
-      "updatedAt": "2026-10-04T13:50:38.000Z"
+      "updatedAt": "2026-10-04T14:35:57.000Z"
     }
   }
 }
