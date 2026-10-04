@@ -2,10 +2,17 @@
   "config": { "maxFixAttempts": 3 },
   "features": {
     "F01": {
-      "state": "PENDING_EVALUATION",
-      "attempt": 0,
+      "state": "CLEAN",
+      "attempt": 1,
       "lastEvaluationReport": null,
-      "updatedAt": "2026-10-03T23:58:00.000Z"
+      "lastCorrection": {
+        "attempt": 0,
+        "by": "fix-runner",
+        "commit": "e851167",
+        "ref": "OC-04",
+        "at": "2026-10-04T01:11:14.000Z"
+      },
+      "updatedAt": "2026-10-04T01:15:00.000Z"
     }
   }
 }
