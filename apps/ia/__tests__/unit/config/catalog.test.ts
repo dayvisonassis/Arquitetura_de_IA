@@ -8,7 +8,11 @@ jest.mock('fs', () => ({
 
 import fs, { readFileSync } from 'fs'
 import path from 'path'
-import { assertCatalog, CatalogError } from '../../../src/config/catalog'
+import {
+  assertCatalog,
+  CatalogError,
+  getCatalog
+} from '../../../src/config/catalog'
 
 type Json = Record<string, unknown>
 
@@ -136,6 +140,35 @@ describe('config/catalog', () => {
       ) as { capabilities: Json[] }
       const names = versioned.capabilities.map(item => item.name)
       expect(names).toEqual(expect.arrayContaining(PRD_CAPABILITIES))
+    })
+  })
+
+  describe('getCatalog', () => {
+    // The only test of this file that calls getCatalog, so the cache starts empty.
+    it('should read the file from CATALOG_FILE at load time and cache the result', () => {
+      process.env = { ...ENV, CATALOG_FILE: 'fixtures/late.json' }
+      serve(
+        withCapabilities(
+          capability({ fallback: undefined, contract: undefined })
+        )
+      )
+
+      const first = getCatalog()
+      const second = getCatalog()
+
+      expect(second).toBe(first)
+      expect(mockedRead).toHaveBeenCalledTimes(1)
+      expect(mockedRead).toHaveBeenCalledWith(
+        path.resolve(process.cwd(), 'fixtures/late.json'),
+        'utf8'
+      )
+      expect(first.capabilities[0]).toMatchObject({
+        fallback: null,
+        contract: null
+      })
+      expect(first.deployments[1].param_mappings).toEqual({})
+      expect(first.deployments[0].fixed_params).toEqual({})
+      expect(Object.isFrozen(first.deployments[0].params)).toBe(true)
     })
   })
 

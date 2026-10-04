@@ -36,7 +36,7 @@ type Capability = {
   contract: { format: 'json'; fields: ContractField[] } | null
 }
 
-type Catalog = {
+export type Catalog = {
   deployments: Deployment[]
   capabilities: Capability[]
 }
@@ -359,4 +359,13 @@ const loadCatalog = (env: Env): Catalog => {
 
 export const assertCatalog = (env: Env = process.env): void => {
   loadCatalog(env)
+}
+
+let cached: Catalog | null = null
+
+export const getCatalog = (): Catalog => {
+  if (!cached) {
+    cached = loadCatalog(process.env)
+  }
+  return cached
 }
