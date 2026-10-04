@@ -24,7 +24,7 @@ provam os seus critérios contra o simulador:
 - **F10 e F13:** custo e cotas sobre um uso de tokens previsível;
 - **F14 e F15:** a resposta em JSON entre crases da demo D7 (`fenced-json`);
 - **F17:** retry, backoff, `Retry-After`, timeout, cooldown e fallback (`error`, `slow`, `timeout`, `times` e a
-  contagem).
+  contagem), e as falhas definitivas que vão ao fallback sem retry (`error` com 400, 401, 403 e 404).
 
 **Escopo.**
 
@@ -227,7 +227,7 @@ aceitos e só registrados.
 | Modo | Resposta |
 |---|---|
 | `ok` | 200 `chat.completion`, com o `content` configurado ou `Resposta simulada.` |
-| `error` | o status configurado (401, 429, 500, 502 ou 503), com o corpo da tabela abaixo e, se configurado, o header `Retry-After` |
+| `error` | o status configurado (400, 401, 403, 404, 429, 500, 502 ou 503), com o corpo da tabela abaixo e, se configurado, o header `Retry-After` |
 | `slow` | espera `delay_ms` e responde como `ok` |
 | `timeout` | nenhuma resposta; a conexão fica aberta até o cliente fechá-la |
 | `fenced-json` | 200, com o conteúdo `` ```json `` + quebra de linha + JSON + quebra de linha + `` ``` ``. O JSON é o `content` configurado ou `{"category": "billing", "reason": "Cobrança duplicada na assinatura."}`, a resposta da demo D7 |
@@ -280,11 +280,19 @@ Exemplos com `Resposta simulada.` (18 caracteres, 5 tokens):
 
 | Status | `type` | `code` | `message` |
 |---|---|---|---|
+| 400 | `invalid_request_error` | `unsupported_parameter` | `Unsupported parameter: this parameter is not supported with this model.` |
 | 401 | `invalid_request_error` | `invalid_api_key` | `Incorrect API key provided.` |
+| 403 | `request_forbidden` | `unsupported_country_region_territory` | `Country, region, or territory not supported.` |
+| 404 | `invalid_request_error` | `model_not_found` | `The model does not exist or you do not have access to it.` |
 | 429 | `requests` | `rate_limit_exceeded` | `Rate limit reached for requests.` |
 | 500 | `server_error` | `server_error` | `The server had an error while processing your request.` |
 | 502 | `server_error` | `bad_gateway` | `Bad gateway.` |
 | 503 | `server_error` | `service_unavailable` | `The engine is currently overloaded, please try again later.` |
+
+400, 401, 403 e 404 são as falhas definitivas da F17 (vão ao fallback sem retry); 429, 500, 502 e 503, as transitórias.
+O 400 simulado usa o `code` `unsupported_parameter`, diferente dos 400 do próprio simulador (`invalid_json` e
+`invalid_request`, abaixo), para que um teste distinga um do outro. Além disso, o 400 simulado é contado no
+`GET /control/stats`, e os do próprio simulador não.
 
 **Erros da requisição:**
 
@@ -306,7 +314,7 @@ Configura o modo de um modelo e substitui o anterior. As estatísticas não muda
 | `mode` | string | sim | — | `ok`, `error`, `slow`, `timeout`, `fenced-json` ou `invalid-json` |
 | `times` | integer | não | todos | 1 a 1.000: o modo vale para as próximas N chamadas, e depois o modelo volta ao padrão |
 | `content` | string | não | `ok`, `slow`, `fenced-json` e `invalid-json` | 1 a 20.000 caracteres. No `fenced-json`, JSON válido; no `invalid-json`, texto que não é JSON |
-| `status` | integer | sim, no `error` | `error` | 401, 429, 500, 502 ou 503 |
+| `status` | integer | sim, no `error` | `error` | 400, 401, 403, 404, 429, 500, 502 ou 503 |
 | `retry_after_seconds` | integer | não | `error` | 0 a 120, só com `status` 429 ou 503 |
 | `delay_ms` | integer | sim, no `slow` | `slow` | 0 a 120.000 |
 
@@ -323,7 +331,7 @@ Um campo fora da coluna "Modos" do modo escolhido é recusado.
 ```
 
 **Erros:** 400 `invalid_value`, com a mensagem citando o campo. Nada muda numa recusa. Exemplos:
-- `The field 'status' must be one of 401, 429, 500, 502, 503.`;
+- `The field 'status' must be one of 400, 401, 403, 404, 429, 500, 502, 503.`;
 - `The field 'retry_after_seconds' is only accepted with status 429 or 503.`;
 - `The field 'content' must be valid JSON in fenced-json mode.`;
 - `The field 'foo' is not accepted in timeout mode.`;
@@ -441,7 +449,7 @@ dele, com o limite de 80% sobre todo o `src/`.
 | completion: `should cut the content at the token limit` | `max_completion_tokens` 2; `max_tokens` 2; os dois juntos (vale o `max_completion_tokens`); limite maior que o conteúdo | conteúdo, `finish_reason` e `completion_tokens` |
 | completion: `should wrap JSON in a json code fence` | padrão e configurado | a cerca `json` da §5, com o JSON interno válido |
 | controller: `should answer ok with deterministic usage` | a requisição da §5 | 200; `usage` 10/5/15 |
-| controller: `should answer the configured error with the OpenAI body and Retry-After` | cada status; 429 e 503 com `retry_after_seconds` | status, corpo da tabela e o header só quando configurado |
+| controller: `should answer the configured error with the OpenAI body and Retry-After` | cada um dos oito status; 429 e 503 com `retry_after_seconds` | status, corpo da tabela e o header só quando configurado |
 | controller: `should wait delay_ms in slow mode` | `delay_ms: 15000`, com a espera simulada | a espera recebe 15000; depois, 200 |
 | controller: `should not answer in timeout mode` | `timeout`; o cliente desiste | nenhuma resposta; a chamada conta |
 | controller: `should cancel the slow wait when the client closes` | o cliente aborta durante a espera | o sinal da espera aborta; nada é escrito |
@@ -449,7 +457,7 @@ dele, com o limite de 80% sobre todo o `src/`.
 | controller: `should accept any or no Authorization header` | sem header, `Bearer x` e `Basic y` | 200 nos três |
 | controller: `should reject an invalid request without counting it` | sem `model`, `messages` vazio, `max_tokens: 0` | 400 `invalid_request` citando o campo; `calls` não muda |
 | controller: `should record the body and the applied mode` | `response_format` e `max_completion_tokens` no corpo | o item de `requests` tem o mesmo corpo e o modo |
-| control: `should validate each mode` | cada linha da tabela de campos, inclusive `status` 400, `delay_ms` 120001, `retry_after_seconds` com 500, `content` que não é JSON no `fenced-json`, JSON no `invalid-json` e campo desconhecido | 400 `invalid_value` citando o campo; nada muda |
+| control: `should validate each mode` | cada linha da tabela de campos, inclusive `status` 418, `delay_ms` 120001, `retry_after_seconds` com 500, `content` que não é JSON no `fenced-json`, JSON no `invalid-json` e campo desconhecido | 400 `invalid_value` citando o campo; nada muda |
 | control: `should store and list a mode` | `POST` e `GET /control/modes` | as respostas da §5, com `remaining_calls` |
 | control: `should reset with 204` | `POST /control/reset` | 204; modos e estatísticas vazios |
 | errors: `should answer invalid JSON, a large body and an unknown route in the OpenAI format` | corpo truncado, 2 MB + 1 byte, `GET /nope` | 400 `invalid_json`, 413 `request_too_large` e 404 `not_found` |
@@ -460,6 +468,7 @@ dele, com o limite de 80% sobre todo o `src/`.
 | integração: `should never answer in timeout mode and keep serving` | `timeout`; o cliente aborta depois de 1 s; depois, uma chamada a outro modelo | nenhuma resposta em 1 s; a outra chamada recebe 200; `calls` conta a primeira |
 | integração: `should send valid JSON fenced as json` | `fenced-json` | o conteúdo começa com a cerca `json` e termina com a cerca de fechamento, e o miolo é JSON válido |
 | integração: `should send Retry-After and recover after times` | `error` 429 com `retry_after_seconds: 2` e `times: 1` | 429 com `Retry-After: 2`; a chamada seguinte recebe 200 |
+| integração: `should answer the definitive errors 400, 403 and 404 and count each call` | `error` com cada um dos três status, uma chamada cada, num modelo por status | o status e o `code` da tabela (o 400 com `unsupported_parameter`); sem `Retry-After`; `calls: 1` em cada modelo |
 | proxy (`catalog-simulated`): `the simulated catalog should be valid without provider credentials` | `assertCatalog` com `CATALOG_FILE=catalog/catalog.simulated.json` e um ambiente sem `OPENAI_API_KEY` e sem `GEMINI_API_KEY` | nenhum problema |
 | proxy (`catalog-simulated`): `the simulated catalog should mirror the versioned catalog` | lê os dois JSON | todo deployment simulado tem `provider: simulated` e não tem `credential_env`; sem esses dois campos, os deployments são iguais e estão na mesma ordem; as capacidades são iguais |
 | proxy (`catalog-simulated`): `each simulated deployment should have its own model` | modelos do catálogo simulado | nenhum repetido, porque os modos são por modelo |
@@ -478,7 +487,8 @@ dele, com o limite de 80% sobre todo o `src/`.
 que usam o simulador são verificados do lado consumidor, com este simulador e o catálogo simulado:
 - F14, 3º critério (`fenced-json` registrado como `invalid_json`);
 - F15, 5º critério (o classificador mostra a resposta fora do formato);
-- F17, 1º e 3º critérios (retries com backoff; cooldown sem chamadas ao primário).
+- F17, 1º e 3º critérios (retries com backoff; cooldown sem chamadas ao primário);
+- F17, 8º critério (um 400 do provedor não gera retry: `error` 400 e `calls: 1`).
 
 **Crescimento de consultas (N+1):** não se aplica. O simulador não tem banco.
 
@@ -489,7 +499,9 @@ que usam o simulador são verificados do lado consumidor, com este simulador e o
   - catálogo simulado espelhando o real, versionado em `apps/ia/catalog/`;
   - registro das chamadas, `times` e `retry_after_seconds`;
   - modelo sem modo configurado responde `ok`;
-  - corte no limite de tokens.
+  - corte no limite de tokens;
+  - depois da avaliação da F03: o modo `error` passa a aceitar também 400, 403 e 404, as falhas definitivas da F17 que
+    faltavam, com o PRD (§6 da F03) alterado junto.
 - **Assumidas nesta spec, sem pergunta, porque o PRD não decide:**
   - o `Authorization` não é lido;
   - mensagens em inglês;
@@ -512,12 +524,13 @@ que usam o simulador são verificados do lado consumidor, com este simulador e o
   - o helper do lado do proxy, que roda o simulador como processo filho com o `cwd` em `apps/ia_simulator` e exige
     `npm ci` nele. O mecanismo e o helper do simulador servem de modelo.
 - **Para a F15 e outros testes e2e:** o host não alcança o simulador, então a mudança de modo vem de dentro da rede.
-- **Para a F17:** o critério "Um 400 do provedor não gera retry" (PRD §9) não é reproduzível no simulador.
-  - O PRD limita o modo `error` a 401, 429, 500, 502 e 503.
-  - O proxy valida a requisição antes do repasse (F08), então nenhuma chamada dele recebe o 400 de validação do
-    simulador.
-  - A F17 prova esse caso com um mock do cliente HTTP no proxy, a menos que o 400 entre na lista do PRD (decisão aberta
-    do usuário).
+- **Para a F17:** as falhas por status e por tempo das duas classes do PRD (§6 da F17) são reproduzíveis de ponta a
+  ponta no simulador:
+  - definitivas, que vão ao fallback sem retry: `error` com 400, 401, 403 ou 404. O critério "Um 400 do provedor não
+    gera retry" (PRD §9) é provado com o `error` 400 e o `calls: 1` do `GET /control/stats`;
+  - transitórias, que recebem retry: `error` com 429, 500, 502 ou 503, `timeout` e `slow` acima do timeout da
+    capacidade;
+  - o "erro de rede" da classe transitória não tem modo no simulador: a F17 o provoca com um endereço sem servidor.
 - **Rastreabilidade:**
   - Regras e limites → §5 (endpoint, modos, faixas e `usage`) e §3;
   - Experiência → §2 (instância de teste), §5 (`stats` e catálogo) e README;

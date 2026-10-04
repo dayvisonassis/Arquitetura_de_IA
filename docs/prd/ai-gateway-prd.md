@@ -322,7 +322,7 @@ Todos os perfis trabalham num ambiente técnico interno, pelo navegador em deskt
 - É o app `apps/ia_simulator`: um servidor compatível com o `POST /v1/chat/completions` da OpenAI, disponível só na rede interna. Aceita qualquer Bearer.
 - **Modos por nome de modelo**, configurados por `POST /control/modes`:
   - `ok`: resposta fixa configurável;
-  - `error`: status configurável entre 401, 429, 500, 502 e 503;
+  - `error`: status configurável entre 400, 401, 403, 404, 429, 500, 502 e 503, que cobrem os status das falhas definitivas e transitórias da F17;
   - `slow`: atraso de 0 a 120.000 ms;
   - `timeout`: nunca responde;
   - `fenced-json`: JSON válido embrulhado em crases;

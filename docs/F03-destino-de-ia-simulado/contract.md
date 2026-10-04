@@ -82,8 +82,8 @@ O `e2e-frontend` não se aplica (sem tela).
     - a mesma requisição sem `max_completion_tokens` e com `max_tokens: 2` → o mesmo resultado;
     - com `max_completion_tokens: 256` e `max_tokens: 2` juntos → vale o 256, sem corte (`Resposta simulada.`,
       `finish_reason: stop`).
-  - [ ] Modo `error` com cada status (401, 429, 500, 502 e 503) → o status e o corpo da tabela da spec (§5). Com
-    `retry_after_seconds: 2` no 429, o header `Retry-After: 2`.
+  - [ ] Modo `error` com cada status (400, 401, 403, 404, 429, 500, 502 e 503) → o status e o corpo da tabela da spec
+    (§5), com o 400 no `code` `unsupported_parameter`. Com `retry_after_seconds: 2` no 429, o header `Retry-After: 2`.
   - [ ] Modo `slow` com `delay_ms: 15000` → a resposta chega depois de 15 s e antes de 20 s, pelo tempo medido no script.
   - [ ] Modo `timeout` →
     - o script desiste depois de 5 s, sem resposta;
@@ -99,7 +99,7 @@ O `e2e-frontend` não se aplica (sem tela).
 - **Comportamentos:**
   - [ ] `POST /control/modes` válido → 200, com o modo e o `remaining_calls`. O `GET /control/modes` mostra o mesmo.
   - [ ] Cada valor abaixo → 400 `invalid_value` citando o campo, sem mudar nada:
-    - `status: 400`;
+    - `status: 418`;
     - `delay_ms: 120001`;
     - `retry_after_seconds` com `status: 500`;
     - `content` que não é JSON no `fenced-json`;
@@ -165,8 +165,10 @@ Rastreio para os critérios de aceite da F03 no PRD (§9) e para as regras da §
   Evidência: o `Sim-01` e os testes `should send valid JSON fenced as json` e `should wrap JSON in a json code fence`.
 - [ ] `OC-05` — O destino não é acessível a partir do host, só pela rede interna do compose (PRD AC 5). Evidência: as
   três verificações de rede do `Net-01`.
-- [ ] `OC-06` — Os demais modos seguem as regras do PRD (§6). Evidência: o `Sim-01` e os testes do controller.
-  - `error` funciona com 401, 429, 500 e 502;
+- [ ] `OC-06` — Os demais modos seguem as regras do PRD (§6). Evidência: o `Sim-01`, os testes do controller e o teste de
+  integração `should answer the definitive errors 400, 403 and 404 and count each call`.
+  - `error` funciona com 400, 401, 403, 404, 429, 500 e 502 (o 503 está no `OC-02`), cobrindo os status das falhas
+    definitivas e transitórias da F17;
   - `timeout` nunca responde e não trava o simulador;
   - `invalid-json` devolve um texto que não é JSON.
 - [ ] `OC-07` — A API de controle recusa valores fora das faixas do PRD (status fora da lista, atraso acima de
@@ -193,7 +195,7 @@ A F03 não tem tela, então nenhuma linha é `e2e`.
 | Superfície / comportamento | Suíte |
 |---|---|
 | `Sim-01` — formato, modos, `usage`, corte, credencial, validação | monorepo unit (`tests-monorepo`) |
-| `Sim-01` — processo real pela rede: `ok`, `error` 503 com contagem, `slow` de 15 s, `timeout`, `fenced-json`, `Retry-After` e `times` | integration (`tests-integration-ia_simulator`) |
+| `Sim-01` — processo real pela rede: `ok`, `error` 503 com contagem, `slow` de 15 s, `timeout`, `fenced-json`, `Retry-After`, `times` e os erros definitivos 400, 403 e 404 | integration (`tests-integration-ia_simulator`) |
 | `Ctrl-01` — validação, respostas, `times`, registro e reset | monorepo unit (`tests-monorepo`) |
 | `Net-01` — sem porta no host; acesso pela rede interna | runtime-only |
 | `Net-01` — instância de teste no host | integration (`tests-integration-ia_simulator`) |
