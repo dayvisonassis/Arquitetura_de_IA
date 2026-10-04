@@ -60,12 +60,14 @@ Os gates checam **o que a sua mudança alterou**.
 | `tests-monorepo` | testes de `__tests__/unit` relacionados aos alterados, com cobertura, por app | `ia`, `ia_simulator` |
 | `tests-integration-backend` | `npm run test:integration` (MySQL e Redis de teste) | backend com `__tests__/integration`; provado em 2026-10-03 |
 | `tests-integration-ia` | `npm run test:integration` e `npm run test:contracts` (verificação do provedor) | `ia` com `__tests__/integration`/`__tests__/contracts`, ou mudança em `contracts/**`; provado em 2026-10-03 |
+| `tests-integration-ia_simulator` | `npm run test:integration` (o processo real do simulador, sem MySQL nem Redis) | `ia_simulator` com `__tests__/integration`; provado em 2026-10-04 |
 | `deadcode` | `knip --directory apps/<app>` | apps alterados |
 | `e2e-frontend` | `playwright test --config playwright.e2e.config.js` | **optIn**, ainda não provado verde (ver abaixo) |
 
 Ordem da cadeia padrão: `typecheck-frontend → typecheck-monorepo → lint-backend → raw-sql-backend →
 query-loop-backend → lint-frontend → lint-monorepo → styles-frontend → build-backend → build-monorepo → arch →
-tests-backend → tests-frontend → tests-monorepo → tests-integration-backend → tests-integration-ia → deadcode`.
+tests-backend → tests-frontend → tests-monorepo → tests-integration-backend → tests-integration-ia →
+tests-integration-ia_simulator → deadcode`.
 
 "Monorepo" aqui são os apps em TypeScript que não são o frontend: `ia` e `ia_simulator`. Um app novo entra em
 `MONOREPO_APPS` (ou na constante equivalente) em [scripts/gates/scope.mjs](scripts/gates/scope.mjs).
@@ -271,10 +273,13 @@ Para cada app alterado:
 As convenções dos testes estão nas skills do fluxo SDD. Este repositório segue o layout que elas esperam:
 `unit-test-writer` (frontend e `apps/backend/__tests__/unit`), `integration-test-writer`
 (`apps/backend/__tests__/integration`), `monorepo-unit-test-writer` (`ia`, `ia_simulator`) e `e2e-test-writer`
-(`tests/e2e`). O `implement-feature` as aciona por feature. Nenhuma skill cobre `apps/ia/__tests__/integration` nem os
-testes de contrato: o `implement-feature` os escreve pelo fallback.
+(`tests/e2e`). O `implement-feature` as aciona por feature. Nenhuma skill cobre `apps/ia/__tests__/integration`,
+`apps/ia_simulator/__tests__/integration` nem os testes de contrato: o `implement-feature` os escreve pelo fallback.
 
-## Gates de integração: `tests-integration-backend` e `tests-integration-ia`
+## Gates de integração: `tests-integration-backend`, `tests-integration-ia` e `tests-integration-ia_simulator`
+
+As regras abaixo valem para o `tests-integration-backend` e o `tests-integration-ia`. O
+`tests-integration-ia_simulator` usa o mesmo mecanismo, sem infraestrutura, e tem as diferenças na subseção dele.
 
 Rodam fora dos containers, com `NODE_ENV=testing`, contra os schemas de teste (`web_test`, `gateway_test`) e os bancos
 de teste do Redis, configurados no `apps/<app>/.env.testing` de cada app.
@@ -310,6 +315,22 @@ provado:
 Depois da implementação da F01, com o `./dev.sh --infra` no ar, a prova falha → passa foi feita contra o MySQL e o Redis
 reais (detalhes no Histórico). Os dois gates estão na cadeia padrão e valem como gates de integração para as skills do
 SDD.
+
+### `tests-integration-ia_simulator`: sem infraestrutura
+
+O destino simulado (F03) não tem banco. Os testes de integração dele sobem o próprio simulador como processo filho, em
+`127.0.0.1` e numa porta livre, e falam com ele por HTTP (spec da F03, §2). O gate usa o mesmo `integrationGate`, com
+`infrastructure: false` no [scripts/runGate.mjs](scripts/runGate.mjs). As diferenças:
+- **Só a parte `__tests__/integration`** → `npm run test:integration`. Não há migrations nem contratos.
+- **Quando roda:** quando muda algo em `apps/ia_simulator/`. Nenhum outro caminho o dispara.
+- **Não precisa do MySQL, do Redis nem do `.env.testing`:** o gate não abre conexão nenhuma antes de rodar, e o
+  processo filho recebe o ambiente do próprio teste.
+- **Não obedece ao `INTEGRATION_SKIP=1`** (decisão do usuário em 2026-10-04). A variável existe para quando falta a
+  infraestrutura, e este gate não depende dela. Com a variável definida, ele roda normalmente.
+- **Valem as mesmas regras dos outros dois:** pasta sem o script falha nomeando o script, e os scripts não usam
+  `--passWithNoTests`.
+
+Provado em 2026-10-04, antes da implementação da F03 (detalhes no Histórico).
 
 ## Conferência dos contratos (`tests-backend`)
 
@@ -434,6 +455,9 @@ Gate verde não significa feature verificada. O que está abaixo continua sendo 
   é medido pelos testes de integração da `integration-test-writer`, não por um gate próprio.
 - **O `.env.testing` de cada app.** Ninguém confere se a senha dele bate com a do `.env.infra`: se divergir, o gate de
   integração falha na conexão com `Access denied`, o que é um problema de ambiente, não de código.
+- **O simulador do compose.** O `tests-integration-ia_simulator` testa um processo do simulador no host, não o
+  container do `./dev.sh`. O isolamento de rede (o simulador acessível só pela rede interna, critério 5 da F03) e a
+  ligação entre o proxy e o simulador no compose continuam sendo verificações de runtime.
 - **Serviços externos.** O PRD proíbe que um teste chame a OpenAI ou o Google. As demos contra os provedores reais são
   manuais.
 - **A infraestrutura dos próprios gates.** `scripts/`, `tests/e2e/` e as regras em `apps/frontend/tools/` não passam
@@ -460,6 +484,25 @@ Gate verde não significa feature verificada. O que está abaixo continua sendo 
    e ao `ARCH_TS_CONFIG` em [scripts/gates/code.mjs](scripts/gates/code.mjs).
 
 ## Histórico
+
+### 2026-10-04: rodada prévia da F03
+
+A spec da F03 pediu um gate de integração para o destino simulado, que não tem banco
+([plano](docs/architecture/gate-plan-f03-2026-10-04.md)).
+
+- **Criado:** `tests-integration-ia_simulator`, na cadeia padrão, entre o `tests-integration-ia` e o `deadcode`. O
+  `integrationGate` ganhou a opção `infrastructure` (padrão `true`); com `false`, pula a checagem do `.env.testing`, do
+  MySQL e do Redis, e o `INTEGRATION_SKIP`.
+- **Provas com arquivos temporários**, todas restauradas (um teste em `apps/ia_simulator/__tests__/integration` e o
+  script `test:integration` no `package.json` do simulador):
+  - sem a pasta → `PASS (nothing to check)`;
+  - pasta sem o script → FAIL, nomeando `test:integration`;
+  - script e um teste que passa, sem `.env.testing` no simulador → PASS;
+  - o mesmo, com `INTEGRATION_SKIP=1` → os testes rodam, e o resumo marca PASS, não `SKIPPED`;
+  - o teste com a asserção quebrada → FAIL;
+  - escopo só em `apps/ia/src/app.ts`, com o teste quebrado ainda no lugar → `PASS (nothing to check)`.
+- **Cadeia padrão verde** depois de restaurar, sobre o diff e sobre `apps/ia_simulator` inteiro, com o gate novo em
+  no-op até a F03 criar a pasta.
 
 ### 2026-10-03: rodada posterior à F01
 

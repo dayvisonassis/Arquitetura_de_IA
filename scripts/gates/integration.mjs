@@ -85,7 +85,7 @@ function partsToRun(target, triggered, candidates) {
 export async function integrationGate(
   scope,
   app,
-  { triggers = [], verifiesContracts = false } = {}
+  { triggers = [], verifiesContracts = false, infrastructure = true } = {}
 ) {
   const target = appScope(scope, app)
   const triggered = scope.files.some(file =>
@@ -105,7 +105,7 @@ export async function integrationGate(
     )
     return NOOP
   }
-  if (process.env.INTEGRATION_SKIP === '1') {
+  if (infrastructure && process.env.INTEGRATION_SKIP === '1') {
     banner([
       `INTEGRATION_SKIP=1: the ${app} integration tests did NOT run.`,
       `Unverified: ${parts.map(part => part.script).join(', ')}.`
@@ -120,7 +120,10 @@ export async function integrationGate(
       `  apps/${app} has __tests__/${part.dir} but no "${part.script}" script`
     )
   }
-  if (missingScripts.length > 0 || !(await infrastructureReady(target))) {
+  if (missingScripts.length > 0) {
+    return false
+  }
+  if (infrastructure && !(await infrastructureReady(target))) {
     return false
   }
   return parts.map(part => runNpmScript(target.dir, part.script)).every(Boolean)

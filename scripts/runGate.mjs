@@ -144,6 +144,12 @@ const GATES = [
       })
   },
   {
+    id: 'tests-integration-ia_simulator',
+    label: 'ia_simulator integration tests against its real process',
+    run: scope =>
+      integrationGate(scope, 'ia_simulator', { infrastructure: false })
+  },
+  {
     id: 'deadcode',
     label: 'Unused files, exports and dependencies (knip)',
     run: scope => forApps(scope, APPS, deadcode)

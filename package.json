@@ -34,6 +34,7 @@
     "gate:tests-monorepo": "node scripts/runGate.mjs tests-monorepo",
     "gate:tests-integration-backend": "node scripts/runGate.mjs tests-integration-backend",
     "gate:tests-integration-ia": "node scripts/runGate.mjs tests-integration-ia",
+    "gate:tests-integration-ia_simulator": "node scripts/runGate.mjs tests-integration-ia_simulator",
     "gate:deadcode": "node scripts/runGate.mjs deadcode",
     "gate:e2e-frontend": "node scripts/runGate.mjs e2e-frontend"
   },
