@@ -407,8 +407,10 @@ A F04 completa o harness (é trabalho de gate, feito pela `gate-builder`):
 - O nome do perfil é o do papel no PRD, menos no `admin`, que é o `domain_admin`. A pasta é `tests/e2e/<perfil>/`.
 - As três contas usam a mesma senha, que fica só nos arquivos de ambiente locais. O banco de desenvolvimento começa
   vazio e é só de teste.
-- Antes da F05/F07, que trazem a API e a tela de domínios, o domínio e as contas do `admin` e do `user` vêm de um seed
-  de desenvolvimento, a definir na spec da F04. Depois, o harness pode criá-los pela `platformAdminApi`.
+- O domínio e as contas do `admin` e do `user` vêm de um seed de desenvolvimento, a definir na spec da F04. O seed vale
+  até a F07, que cria pela plataforma o domínio, a cópia dele no backend (usada pelo login) e o primeiro `admin`, e
+  até a F09, que cria o `user`. A API de domínios da F05 é do proxy, com a master key, e não atualiza a cópia do
+  backend. Depois da F07/F09, o harness pode criar o domínio e as contas pela `platformAdminApi`.
 - O isolamento entre domínios (PRD §4: cada tela com um administrador de outro domínio) não ganha um quarto perfil: ele
   é provado na API, pelos testes de integração do backend, e nas telas, à mão.
 - As regras da `e2e-test-writer` (e da `e2e-test-validator`) hoje aceitam só `admin` e `agent`. Os perfis
