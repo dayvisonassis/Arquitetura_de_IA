@@ -20,7 +20,7 @@ usage() {
   cat <<'EOF'
 Usage: ./dev.sh [--infra | --down]
 
-  (no option)  start MySQL, Redis and the apps, applying the migrations
+  (no option)  start MySQL, Redis and the apps, applying the migrations and the backend seed
   --infra      start only MySQL and Redis, for the integration tests
   --down       stop the apps and the infrastructure, keeping the volumes
 EOF
@@ -105,6 +105,11 @@ apply_migrations() {
   done
 }
 
+apply_seeds() {
+  printf '\nApplying the backend development seed\n'
+  app_compose run --rm --no-deps backend npm run -s seed:dev
+}
+
 start_apps() {
   app_compose up -d --build --wait
 }
@@ -135,6 +140,7 @@ main() {
       require_matching_passwords
       start_infra
       apply_migrations
+      apply_seeds
       start_apps
       print_addresses
       ;;

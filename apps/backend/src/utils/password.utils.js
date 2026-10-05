@@ -1,3 +1,4 @@
+const BCRYPT_COST = 10
 const MIN_LENGTH = 10
 const MAX_LENGTH = 64
 const MAX_BYTES = 72
@@ -25,4 +26,4 @@ const validatePassword = password => {
   return { valid: true }
 }
 
-module.exports = { RULE_MESSAGES, validatePassword }
+module.exports = { BCRYPT_COST, RULE_MESSAGES, validatePassword }
