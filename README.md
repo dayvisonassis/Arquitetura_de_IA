@@ -31,6 +31,7 @@ Nenhum arquivo de ambiente real é versionado. Cada um tem um modelo versionado 
 | `apps/backend/.env.development` e `.env.testing` | `apps/backend/config/.env.<ambiente>.example` | backend |
 | `apps/ia/.env.development` e `.env.testing` | `apps/ia/config/.env.<ambiente>.example` | proxy |
 | `apps/ia_simulator/.env.development` | `apps/ia_simulator/config/.env.development.example` | destino simulado |
+| `.env.e2e` | `config/.env.e2e.example` | contas dos gates de navegador (`e2e-frontend` e `visual-frontend`) |
 
 ```bash
 cp config/.env.infra.example .env.infra
@@ -118,6 +119,49 @@ Cada app com banco tem as próprias migrations Knex, nomeadas `YYYYMMDDHHMMSS_de
 cd apps/backend && npm run migration:add -- nome_da_migration   # idem em apps/ia
 npm run migrations:dev                                          # o ./dev.sh já faz isso
 ```
+
+## Autenticação
+
+O sistema web abre em `http://127.0.0.1:4200/login`. Depois do login, o administrador da plataforma vai para
+Domínios, o administrador de domínio para Usuários e o usuário para o Playground. Até a F07, a F09 e a F15, essas três
+telas são provisórias.
+
+**Primeiro administrador.** Na partida, se ainda não houver nenhum administrador da plataforma, o backend cria um com o
+`PLATFORM_ADMIN_EMAIL` e o `PLATFORM_ADMIN_PASSWORD` do `.env.<ambiente>`. Se já houver, nada muda. A senha precisa de
+10 a 64 caracteres e de no máximo 72 bytes em UTF-8. Fora dessas regras, o backend não sobe, e o log diz a regra.
+
+**Contas de desenvolvimento.** Depois das migrations, o `./dev.sh` aplica o seed `apps/backend/data/seeds/dev_accounts.js`,
+que cria o que faltar e nunca altera o que já existe:
+
+| Conta | Papel | Domínio |
+|---|---|---|
+| o `PLATFORM_ADMIN_EMAIL` | administrador da plataforma (criado pelo backend, não pelo seed) | — |
+| `admin@temporario.com` | administrador de domínio | Domínio de teste (ativo) |
+| `user@temporario.com` | usuário | Domínio de teste (ativo) |
+| `inativo@temporario.com` | usuário | Domínio inativo de teste |
+
+Todas usam a senha do `PLATFORM_ADMIN_PASSWORD`. O seed só roda com `NODE_ENV=development` e vale até a F07 e a F09
+criarem domínios e usuários pela plataforma. Para rodá-lo à mão:
+`docker compose -p ai-gateway-app -f docker-compose.app.dev.yml run --rm --no-deps backend npm run -s seed:dev`.
+
+**Limites de tentativas.**
+- Cinco senhas erradas seguidas bloqueiam a conta por 15 minutos.
+- Cada IP tem no máximo 20 tentativas de login a cada 15 minutos (`LOGIN_RATE_LIMIT_MAX`, regra do PRD). Todo acesso
+  local chega ao backend pelo mesmo IP do Docker, e os gates de navegador também logam. Por isso o `.env.development`
+  usa `LOGIN_RATE_LIMIT_MAX=200`. O `testing` e a produção ficam com 20.
+- Depois de mudar o `.env.development` do backend, recrie o container (`./dev.sh`, ou
+  `docker compose -p ai-gateway-app -f docker-compose.app.dev.yml up -d backend`). O `restart` não relê o `env_file`.
+
+**Desbloquear uma conta no ambiente local**, sem esperar os 15 minutos (troque o e-mail; a senha do MySQL é lida dentro
+do container, sem aparecer no terminal):
+
+```bash
+docker compose -p ai-gateway-infra exec mysql sh -c \
+  'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot web -e "UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE email = '\''admin@temporario.com'\''"'
+```
+
+Para o administrador da plataforma, a tabela é `platform_users`. O contador de tentativas por IP fica no Redis
+(`rl:auth:<ip>`, banco 1) e expira sozinho em 15 minutos.
 
 ## Catálogo de capacidades
 
