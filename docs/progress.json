@@ -27,6 +27,12 @@
       "attempt": 0,
       "lastEvaluationReport": null,
       "updatedAt": "2026-10-04T18:17:42.000Z"
+    },
+    "F04": {
+      "state": "PENDING_EVALUATION",
+      "attempt": 0,
+      "lastEvaluationReport": null,
+      "updatedAt": "2026-10-05T01:02:29.000Z"
     }
   }
 }
