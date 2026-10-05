@@ -1,0 +1,31 @@
+@use './base-theme' as base;
+
+html {
+  --app-spacing-2xs: 2px;
+  --app-spacing-xs: 4px;
+  --app-spacing-sm: 8px;
+  --app-spacing-md: 12px;
+  --app-spacing-lg: 16px;
+  --app-spacing-xl: 24px;
+  --app-spacing-2xl: 32px;
+
+  --app-success: #28a745;
+  --app-error: var(--mat-sys-error);
+  --app-warning: light-dark(#a15c00, #ffb74d);
+  --app-info: light-dark(#0b6bcb, #64b5f6);
+  --app-link: light-dark(#0062cc, #64b5f6);
+  --app-on-success: #ffffff;
+
+  --app-header-height: 46px;
+  --app-sidebar-width: 220px;
+
+  @include base.base-theme;
+}
+
+.theme-default {
+  color-scheme: light;
+}
+
+.theme-default-dark {
+  color-scheme: dark;
+}

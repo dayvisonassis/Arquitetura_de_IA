@@ -1,4 +1,5 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "entry": ["tools/eslint-rules/*.js"]
+  "entry": ["tools/eslint-rules/*.js"],
+  "ignoreDependencies": ["@fontsource/open-sans", "material-icons"]
 }

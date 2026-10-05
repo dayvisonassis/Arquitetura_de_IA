@@ -1,0 +1,23 @@
+@use '@angular/material' as mat;
+
+@mixin base-theme {
+  @include mat.theme(
+    (
+      color: (
+        primary: mat.$azure-palette,
+        tertiary: mat.$blue-palette,
+        theme-type: color-scheme
+      ),
+      typography: 'Open Sans',
+      density: -2
+    )
+  );
+  @include mat.theme-overrides(
+    (
+      surface: light-dark(#f4f4f4, #15181c),
+      surface-container: light-dark(#ffffff, #1d2126),
+      surface-container-high: light-dark(#f8f9fa, #242930),
+      surface-container-highest: light-dark(#eaeaea, #2d333b)
+    )
+  );
+}

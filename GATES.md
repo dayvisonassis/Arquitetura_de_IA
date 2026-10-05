@@ -210,10 +210,10 @@ Limite conhecido: uma entrada que não casa com nenhum achado (velha ou escrita 
 
 ## `styles-frontend`: o design system
 
-Aplica o subconjunto determinístico do design system. A fonte das regras é
-`.claude/skills/pabx-design-system/references/angular-material.md`, versionado neste repositório. A F04 copia o
-documento para `docs/design-system/angular-material.md`, junto com o tema. Regras subjetivas (densidade, hierarquia,
-estética) **não entram no gate**: ficam para a verificação visual num navegador.
+Aplica o subconjunto determinístico do design system. A fonte das regras é o design system do projeto,
+[docs/design-system/angular-material.md](docs/design-system/angular-material.md), criado na F04 como cópia adaptada da
+referência que acompanha as skills de UI, junto com o tema em `apps/frontend/src/themes/`. Regras subjetivas
+(densidade, hierarquia, estética) **não entram no gate**: ficam para a verificação visual num navegador.
 
 - **CSS**, pelo stylelint ([apps/frontend/.stylelintrc.json](apps/frontend/.stylelintrc.json) e o plugin local
   [apps/frontend/tools/stylelint-rules/](apps/frontend/tools/stylelint-rules/)), tudo como erro:
@@ -503,6 +503,9 @@ Montado na rodada prévia da F04 (2026-10-04), antes de existir tela. Na **rodad
 
 - **`apps/backend/knip.json` e `apps/frontend/knip.json`** declaram `tools/eslint-rules/*.js` como entrada. O runner
   carrega essas regras por `rulePaths`, e o knip não enxerga isso.
+- **`apps/frontend/knip.json` ignora `@fontsource/open-sans` e `material-icons`** (F04). As fontes entram no build pela
+  lista `styles` do `angular.json`, que o knip não lê como uso. Sem elas, o Open Sans e os ícones do Material caem para
+  fontes do sistema, o que o `visual-frontend` acusa.
 - **O `.eslintrc.json` do frontend declara o `@angular-eslint/template-parser`** no override de `.html`. O preset já o
   usa, mas sem a declaração o knip acusa a dependência como não usada.
 - **`coverageProvider: 'v8'`** nos quatro `jest.config.js`: o provider padrão gera caminhos `file:/C:/…` no Windows e

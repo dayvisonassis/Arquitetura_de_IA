@@ -17,12 +17,18 @@
     "format:check": "prettier --check --config ./.prettierrc \"src/**/*.{ts,html,css,scss}\""
   },
   "dependencies": {
+    "@angular/animations": "~19.2.20",
+    "@angular/cdk": "~19.2.19",
     "@angular/common": "~19.2.20",
     "@angular/compiler": "~19.2.20",
     "@angular/core": "~19.2.20",
+    "@angular/forms": "~19.2.20",
+    "@angular/material": "~19.2.19",
     "@angular/platform-browser": "~19.2.20",
     "@angular/platform-browser-dynamic": "~19.2.20",
     "@angular/router": "~19.2.20",
+    "@fontsource/open-sans": "^5.3.0",
+    "material-icons": "^1.13.14",
     "rxjs": "^7.8.2",
     "tslib": "^2.8.1",
     "zone.js": "^0.15.1"

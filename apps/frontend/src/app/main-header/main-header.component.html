@@ -1,0 +1,28 @@
+<header class="main-header">
+  <span class="brand">AI Gateway</span>
+  <span class="spacer"></span>
+  <div class="identity" *ngIf="me$ | async as me">
+    <span class="identity-name">{{ me.name }}</span>
+    <span class="identity-meta"
+      >{{ roleLabel(me) }} · {{ domainLabel(me) }}</span
+    >
+  </div>
+  <button
+    mat-icon-button
+    type="button"
+    aria-label="Alternar tema"
+    (click)="toggleTheme()"
+  >
+    <mat-icon>{{
+      (isDarkMode$ | async) ? 'light_mode' : 'dark_mode'
+    }}</mat-icon>
+  </button>
+  <button
+    mat-flat-button
+    class="btn-secondary"
+    type="button"
+    (click)="logout()"
+  >
+    Sair
+  </button>
+</header>

@@ -1,0 +1,26 @@
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: var(--app-spacing-xs);
+  min-height: 24px;
+  font-size: 12px;
+}
+
+.crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--app-spacing-2xs);
+  color: var(--mat-sys-on-surface-variant);
+  text-decoration: none;
+}
+
+.crumb mat-icon,
+.separator {
+  width: 16px;
+  height: 16px;
+  font-size: 16px;
+}
+
+.separator {
+  color: var(--mat-sys-on-surface-variant);
+}

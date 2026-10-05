@@ -1,0 +1,51 @@
+h1.title {
+  margin: 0 0 var(--app-spacing-xs);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+}
+
+p.login-box-msg {
+  margin: 0 0 var(--app-spacing-md);
+  font-size: 12px;
+  text-align: center;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.separator {
+  height: 1px;
+  margin: var(--app-spacing-md) 0;
+  background: var(--mat-sys-outline-variant);
+}
+
+.link {
+  display: block;
+  font-size: 12px;
+  text-align: center;
+  color: var(--app-link);
+}
+
+.callout {
+  margin: 0 0 var(--app-spacing-md);
+  padding: var(--app-spacing-sm) var(--app-spacing-md);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.callout-error {
+  color: var(--mat-sys-on-error-container);
+  background: var(--mat-sys-error-container);
+}
+
+.callout-info {
+  color: var(--mat-sys-on-surface);
+  background: var(--mat-sys-surface-container-highest);
+}
+
+.btn-primary-green {
+  --mdc-filled-button-container-color: var(--app-success);
+  --mdc-filled-button-label-text-color: var(--app-on-success);
+  --mdc-filled-button-container-height: 32px;
+  --mdc-filled-button-label-text-size: 12px;
+  width: 100%;
+}

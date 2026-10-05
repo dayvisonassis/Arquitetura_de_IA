@@ -1,0 +1,23 @@
+.auth-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: var(--app-spacing-lg);
+  box-sizing: border-box;
+  background: var(--mat-sys-surface);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 360px;
+  background: var(--mat-sys-surface-container);
+}
+
+:host ::ng-deep .auth-card.mdc-card {
+  padding: 0 !important;
+}
+
+.auth-card mat-card-content {
+  padding: 16px 20px 12px;
+}

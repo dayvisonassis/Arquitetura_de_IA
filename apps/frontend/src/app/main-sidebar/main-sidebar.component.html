@@ -1,0 +1,11 @@
+<nav class="sidebar" aria-label="Menu principal">
+  <a
+    *ngFor="let item of items$ | async"
+    class="nav-item"
+    [routerLink]="item.route"
+    routerLinkActive="active"
+  >
+    <mat-icon>{{ item.icon }}</mat-icon>
+    <span>{{ item.label }}</span>
+  </a>
+</nav>

@@ -1,0 +1,52 @@
+:host {
+  display: block;
+}
+
+.main-header {
+  display: flex;
+  align-items: center;
+  gap: var(--app-spacing-md);
+  height: var(--app-header-height);
+  padding: 0 var(--app-spacing-lg);
+  box-sizing: border-box;
+  background: var(--mat-sys-surface-container);
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+}
+
+.brand {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.identity {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.3;
+}
+
+.identity-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.identity-meta {
+  font-size: 11px;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.btn-secondary {
+  --mdc-filled-button-container-color: var(--mat-sys-surface-container-highest);
+  --mdc-filled-button-label-text-color: var(--mat-sys-on-surface);
+  --mdc-filled-button-container-height: 32px;
+  --mdc-filled-button-label-text-size: 12px;
+}
+
+.btn-secondary:hover {
+  background-color: var(--mat-sys-surface-container-highest);
+  color: var(--mat-sys-on-surface);
+}
