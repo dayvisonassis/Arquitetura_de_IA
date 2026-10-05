@@ -1,10 +1,42 @@
-import { binToUuid, uuidToBin } from '../../../src/utils/uuid.utils'
+import { binToUuid, isUuid, uuidToBin } from '../../../src/utils/uuid.utils'
 
 const CANONICAL = '4bf92f35-77b3-4da6-a3ce-929d0e0e4736'
 
 describe('uuid.utils', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+  })
+
+  describe('isUuid', () => {
+    it.each([
+      ['lower case', CANONICAL],
+      ['upper case', CANONICAL.toUpperCase()],
+      ['mixed case', '4BF92F35-77b3-4DA6-a3ce-929D0E0E4736']
+    ])(
+      'should accept the hyphenated 36-character form in %s',
+      (_case, value) => {
+        expect(isUuid(value)).toBe(true)
+      }
+    )
+
+    it.each([
+      ['32 hex digits', CANONICAL.replace(/-/g, '')],
+      ['the braced form', `{${CANONICAL}}`],
+      ['null', null],
+      ['undefined', undefined],
+      ['a number', 42],
+      ['an object', {}],
+      ['a buffer', Buffer.alloc(16)],
+      ['an empty string', ''],
+      ['a non hex character', 'zbf92f35-77b3-4da6-a3ce-929d0e0e4736'],
+      ['misplaced hyphens', '4bf92f3577b3-4da6-a3ce-929d-0e0e4736'],
+      ['a missing digit', '4bf92f35-77b3-4da6-a3ce-929d0e0e473'],
+      ['an extra digit', `${CANONICAL}0`],
+      ['surrounding spaces', ` ${CANONICAL} `],
+      ['a trailing newline', `${CANONICAL}\n`]
+    ])('should reject %s', (_case, value) => {
+      expect(isUuid(value)).toBe(false)
+    })
   })
 
   describe('uuidToBin', () => {

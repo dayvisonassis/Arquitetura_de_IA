@@ -6,6 +6,9 @@ const ACCEPTED_FORMATS = [
 
 const UUID_BYTES = 16
 
+export const isUuid = value =>
+  typeof value === 'string' && ACCEPTED_FORMATS[1].test(value)
+
 export const uuidToBin = value => {
   if (
     typeof value !== 'string' ||

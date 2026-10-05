@@ -29,10 +29,14 @@
     "cors": "^2.8.6",
     "dotenv": "^16.6.1",
     "express": "^4.22.3",
+    "express-rate-limit": "^8.7.0",
+    "joi": "^17.13.8",
+    "jsonwebtoken": "^9.0.3",
     "knex": "^3.3.0",
     "mysql2": "^3.24.5",
     "pino": "^9.14.0",
     "pino-http": "^10.5.0",
+    "rate-limit-redis": "^4.3.1",
     "redis": "^4.7.1"
   },
   "devDependencies": {
