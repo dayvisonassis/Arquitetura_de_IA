@@ -4,7 +4,12 @@ import { config } from '../config/env'
 const allowFrontend = cors({
   origin: config.frontendOrigin,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-  allowedHeaders: ['Authorization', 'Content-Type', 'x-request-id'],
+  allowedHeaders: [
+    'Authorization',
+    'Content-Type',
+    'x-request-id',
+    'x-domain-id'
+  ],
   exposedHeaders: ['x-request-id'],
   optionsSuccessStatus: 204
 })

@@ -34,11 +34,33 @@ describe('cors.middleware', () => {
       'GET,POST,PUT,PATCH,DELETE'
     )
     expect(preflight.headers['access-control-allow-headers']).toBe(
-      'Authorization,Content-Type,x-request-id'
+      'Authorization,Content-Type,x-request-id,x-domain-id'
     )
     expect(get.status).toBe(200)
     expect(get.headers['access-control-allow-origin']).toBe(FRONTEND)
     expect(get.headers['access-control-expose-headers']).toBe('x-request-id')
+  })
+
+  it('should allow the X-Domain-Id header from the frontend origin', async () => {
+    const preflight = await request(app)
+      .options('/resource')
+      .set('Origin', FRONTEND)
+      .set('Access-Control-Request-Method', 'PUT')
+      .set('Access-Control-Request-Headers', 'authorization,x-domain-id')
+    const put = await request(app)
+      .put('/resource')
+      .set('Origin', FRONTEND)
+      .set('X-Domain-Id', '4bf92f35-77b3-4da6-a3ce-929d0e0e4736')
+
+    expect(preflight.status).toBe(204)
+    expect(
+      preflight.headers['access-control-allow-headers'].split(',')
+    ).toContain('x-domain-id')
+    expect(put.status).toBe(200)
+    expect(route).toHaveBeenCalledTimes(1)
+    expect(route.mock.calls[0][0].get('x-domain-id')).toBe(
+      '4bf92f35-77b3-4da6-a3ce-929d0e0e4736'
+    )
   })
 
   it('should refuse another origin with 403', async () => {

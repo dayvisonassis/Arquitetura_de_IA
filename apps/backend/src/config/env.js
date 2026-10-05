@@ -1,4 +1,8 @@
 require('../../loader')
+const { RULE_MESSAGES, validatePassword } = require('../utils/password.utils')
+const { isValidEmail } = require('../utils/email.utils')
+
+const LOGIN_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000
 
 const LOG_LEVELS = [
   'fatal',
@@ -30,6 +34,19 @@ const required = check => value => value !== undefined && check(value)
 const optional = check => value => value === undefined || check(value)
 const present = () => true
 
+const emailReason = value =>
+  isValidEmail(value) ? null : 'must be a valid e-mail up to 254 characters'
+
+const passwordReason = value => {
+  const { valid, rule } = validatePassword(value)
+  return valid ? null : RULE_MESSAGES[rule]
+}
+
+const REASONS = {
+  PLATFORM_ADMIN_EMAIL: emailReason,
+  PLATFORM_ADMIN_PASSWORD: passwordReason
+}
+
 const RULES = [
   ['PORT', optional(value => isInteger(value, 1, 65535))],
   ['FRONTEND_ORIGIN', optional(isHttpUrl)],
@@ -50,8 +67,9 @@ const RULES = [
   ['GATEWAY_MASTER_KEY', required(value => value.length >= 32)],
   ['JWT_SECRET', required(value => value.length >= 32)],
   ['KEY_ENCRYPTION_KEY', required(value => /^[0-9a-fA-F]{64}$/.test(value))],
-  ['PLATFORM_ADMIN_EMAIL', required(present)],
-  ['PLATFORM_ADMIN_PASSWORD', required(present)],
+  ['PLATFORM_ADMIN_EMAIL', required(value => !emailReason(value))],
+  ['PLATFORM_ADMIN_PASSWORD', required(value => !passwordReason(value))],
+  ['LOGIN_RATE_LIMIT_MAX', optional(value => isInteger(value, 1, 10000))],
   ['LOG_LEVEL', optional(value => LOG_LEVELS.includes(value))]
 ]
 
@@ -87,22 +105,32 @@ const buildConfig = env => {
     platformAdmin: Object.freeze({
       email: value('PLATFORM_ADMIN_EMAIL'),
       password: value('PLATFORM_ADMIN_PASSWORD')
+    }),
+    loginRateLimit: Object.freeze({
+      max: Number(value('LOGIN_RATE_LIMIT_MAX') ?? 20),
+      windowMs: LOGIN_RATE_LIMIT_WINDOW_MS
     })
   })
 }
 
 class ConfigError extends Error {
-  constructor(variable) {
-    super(`Missing or invalid environment variable: ${variable}`)
+  constructor(variable, reason) {
+    const detail = reason ? ` (${reason})` : ''
+    super(`Missing or invalid environment variable: ${variable}${detail}`)
     this.name = 'ConfigError'
     this.variable = variable
+    this.reason = reason ?? null
   }
 }
 
 const assertConfig = (env = process.env) => {
   const invalid = RULES.find(([name, isValid]) => !isValid(read(env, name)))
   if (invalid) {
-    throw new ConfigError(invalid[0])
+    const [name] = invalid
+    const current = read(env, name)
+    const reason =
+      current !== undefined && REASONS[name] ? REASONS[name](current) : null
+    throw new ConfigError(name, reason)
   }
 }
 

@@ -12,9 +12,11 @@ module.exports = {
     user: config.db.user,
     password: config.db.password,
     database: config.db.database,
-    timezone: 'Z'
+    timezone: 'Z',
+    connectTimeout: 2000
   },
   pool: { min: 0, max: 10, afterCreate: useUtc },
+  acquireConnectionTimeout: 2000,
   migrations: { directory: 'migrations', tableName: 'knex_migrations' },
   seeds: { directory: 'data/seeds' }
 }
